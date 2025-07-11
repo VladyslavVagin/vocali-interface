@@ -1,7 +1,5 @@
 import axios from 'axios'
 
-console.log("VITE_API_BASE_URL:", import.meta.env.VITE_API_BASE_URL);
-
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL,
   headers: {
@@ -27,8 +25,10 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
+    // Only auto-logout for 401 errors on non-profile endpoints
+    if (error.response?.status === 401 && !error.config.url?.includes('/auth/me')) {
       localStorage.removeItem('token')
+      localStorage.removeItem('refreshToken')
       window.location.href = '/auth#login'
     }
     return Promise.reject(error)

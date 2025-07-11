@@ -1,17 +1,66 @@
+import { useEffect, useRef } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
 import { useNavigate } from 'react-router-dom'
-import { LogOut, Heart, Mic, Settings } from 'lucide-react'
-import { logout } from '../redux/slices/authSlice'
+import { LogOut, Heart, Mic, Settings, User, Mail, Loader2 } from 'lucide-react'
+import { logout, getProfile } from '../redux/slices/authSlice'
 import type { RootState, AppDispatch } from '../redux/store'
+import Logo from '../components/Logo'
 
 const Main = () => {
   const dispatch = useDispatch<AppDispatch>()
   const navigate = useNavigate()
-  const { user } = useSelector((state: RootState) => state.auth)
+  const { user, isAuthenticated, token, loading } = useSelector((state: RootState) => state.auth)
+  const hasFetchedProfile = useRef(false)
+
+  // Debug logging
+  console.log('Main component state:', { user, isAuthenticated, token, loading })
+
+  useEffect(() => {
+    // Only fetch profile if we have a valid token but no user data and haven't fetched yet
+    if (token && token !== 'undefined' && token !== 'null' && isAuthenticated && !user && !hasFetchedProfile.current) {
+      console.log('Fetching profile...')
+      hasFetchedProfile.current = true
+      dispatch(getProfile())
+    }
+  }, [token, isAuthenticated, dispatch])
+
+  useEffect(() => {
+    // If not authenticated or token is invalid, redirect to login
+    if (!isAuthenticated || !token || token === 'undefined' || token === 'null') {
+      console.log('Redirecting to login...')
+      hasFetchedProfile.current = false
+      navigate('/auth#login')
+    }
+  }, [isAuthenticated, token, navigate])
 
   const handleLogout = () => {
+    hasFetchedProfile.current = false
     dispatch(logout())
     navigate('/auth#login')
+  }
+
+  // Show loading while fetching profile (only if we're authenticated and have a token)
+  if (loading && !user && isAuthenticated && token && token !== 'undefined' && token !== 'null') {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="h-12 w-12 text-blue-600 animate-spin mx-auto mb-4" />
+          <p className="text-gray-600">Loading your profile...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // If not authenticated, show loading (will redirect in useEffect)
+  if (!isAuthenticated || !token || token === 'undefined' || token === 'null') {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="h-12 w-12 text-blue-600 animate-spin mx-auto mb-4" />
+          <p className="text-gray-600">Redirecting to login...</p>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -20,11 +69,23 @@ const Main = () => {
       <header className="bg-white shadow-sm border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
-            <div className="flex items-center">
+            <div className="flex items-center space-x-4">
+              <Logo size="md" />
               <h1 className="text-2xl font-bold text-gray-800">Vocali</h1>
             </div>
-            <div className="flex items-center space-x-4">
-              <span className="text-gray-600">Welcome, {user?.firstName} {user?.lastName}</span>
+            <div className="flex items-center space-x-6">
+              {user && (
+                <div className="flex items-center space-x-3">
+                  <div className="flex items-center space-x-2 text-gray-600">
+                    <User className="h-4 w-4" />
+                    <span className="font-medium">{user.name}</span>
+                  </div>
+                  <div className="flex items-center space-x-2 text-gray-500">
+                    <Mail className="h-4 w-4" />
+                    <span className="text-sm">{user.email}</span>
+                  </div>
+                </div>
+              )}
               <button
                 onClick={handleLogout}
                 className="flex items-center space-x-2 text-gray-600 hover:text-gray-800 transition-colors"

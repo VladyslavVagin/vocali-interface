@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, Heart, Play, Trash2, Plus } from 'lucide-react'
+import Logo from '../components/Logo'
 
 interface FavoriteCommand {
   id: string
@@ -59,6 +60,7 @@ const Favorites = () => {
                 <ArrowLeft className="h-5 w-5" />
                 <span>Back</span>
               </button>
+              <Logo size="sm" />
               <h1 className="text-2xl font-bold text-gray-800">Favorites</h1>
             </div>
             <button className="flex items-center space-x-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-semibold py-2 px-4 rounded-lg hover:from-blue-600 hover:to-indigo-700 transition-all duration-200">

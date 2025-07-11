@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import { useNavigate } from 'react-router-dom'
-import { Eye, EyeOff, Mail, Lock, Loader2, Mic } from 'lucide-react'
+import { Eye, EyeOff, Mail, Lock, Loader2 } from 'lucide-react'
 import { signin, clearError } from '../redux/slices/authSlice'
 import type { RootState, AppDispatch } from '../redux/store'
+import Logo from '../components/Logo'
 
 const Login = () => {
   const [formData, setFormData] = useState({
@@ -14,13 +15,18 @@ const Login = () => {
 
   const dispatch = useDispatch<AppDispatch>()
   const navigate = useNavigate()
-  const { loading, error, isAuthenticated } = useSelector((state: RootState) => state.auth)
+  const { loading, error, isAuthenticated, token } = useSelector((state: RootState) => state.auth)
+
+  // Debug logging
+  console.log('Login component state:', { isAuthenticated, token, loading })
 
   useEffect(() => {
-    if (isAuthenticated) {
+    console.log('Login useEffect triggered:', { isAuthenticated, token })
+    if (isAuthenticated && token && token !== 'undefined' && token !== 'null') {
+      console.log('Navigating to main page...')
       navigate('/')
     }
-  }, [isAuthenticated, navigate])
+  }, [isAuthenticated, token, navigate])
 
   useEffect(() => {
     dispatch(clearError())
@@ -43,7 +49,7 @@ const Login = () => {
       {/* Background Logo */}
       <div className="absolute inset-0 flex items-center justify-center opacity-5">
         <div className="text-white">
-          <Mic className="h-96 w-96" />
+          <Logo size="xl" className="h-96 w-96" />
         </div>
       </div>
       
@@ -60,7 +66,7 @@ const Login = () => {
         <div className="text-center mb-8">
           <div className="flex items-center justify-center mb-6">
             <div className="bg-gradient-to-r from-blue-500 to-purple-600 p-4 rounded-2xl shadow-lg">
-              <Mic className="h-10 w-10 text-white" />
+              <Logo size="lg" animated={true} />
             </div>
           </div>
           <h1 className="text-4xl font-bold text-white mb-3">Welcome Back</h1>

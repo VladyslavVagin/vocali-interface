@@ -1,9 +1,18 @@
 export interface User {
-  id: string
+  sub: string
   email: string
+  name: string
   firstName: string
   lastName: string
-  name?: string // For backward compatibility
+  username: string
+  emailVerified: boolean
+  userStatus: string
+  enabled: boolean
+  tokenUse: string
+  scope: string
+  authTime: number
+  issuedAt: number
+  expiresAt: number
 }
 
 export interface SigninCredentials {

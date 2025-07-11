@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import { useNavigate } from 'react-router-dom'
-import { Eye, EyeOff, Mail, Lock, User, Loader2, Mic } from 'lucide-react'
+import { Eye, EyeOff, Mail, Lock, User, Loader2 } from 'lucide-react'
 import { signup, clearError } from '../redux/slices/authSlice'
 import type { RootState, AppDispatch } from '../redux/store'
+import Logo from '../components/Logo'
 
 const Register = () => {
   const [formData, setFormData] = useState({
@@ -60,7 +61,7 @@ const Register = () => {
       {/* Background Logo */}
       <div className="absolute inset-0 flex items-center justify-center opacity-5">
         <div className="text-white">
-          <Mic className="h-96 w-96" />
+          <Logo size="xl" className="h-96 w-96" />
         </div>
       </div>
       
@@ -77,7 +78,7 @@ const Register = () => {
         <div className="text-center mb-8">
           <div className="flex items-center justify-center mb-6">
             <div className="bg-gradient-to-r from-blue-500 to-purple-600 p-4 rounded-2xl shadow-lg">
-              <Mic className="h-10 w-10 text-white" />
+              <Logo size="lg" animated={true} />
             </div>
           </div>
           <h1 className="text-4xl font-bold text-white mb-3">Create Account</h1>

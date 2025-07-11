@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import { useNavigate } from 'react-router-dom'
-import { Mail, Loader2, Mic, ArrowLeft, RefreshCw } from 'lucide-react'
+import { Mail, Loader2, ArrowLeft, RefreshCw } from 'lucide-react'
 import { confirmSignup, resendConfirmationCode, clearError } from '../redux/slices/authSlice'
 import type { RootState, AppDispatch } from '../redux/store'
+import Logo from '../components/Logo'
 
 const Confirmation = () => {
   const [confirmationCode, setConfirmationCode] = useState('')
@@ -48,7 +49,7 @@ const Confirmation = () => {
         {/* Background Logo */}
         <div className="absolute inset-0 flex items-center justify-center opacity-5">
           <div className="text-white">
-            <Mic className="h-96 w-96" />
+            <Logo size="xl" className="h-96 w-96" />
           </div>
         </div>
         
@@ -81,7 +82,7 @@ const Confirmation = () => {
       {/* Background Logo */}
       <div className="absolute inset-0 flex items-center justify-center opacity-5">
         <div className="text-white">
-          <Mic className="h-96 w-96" />
+          <Logo size="xl" className="h-96 w-96" />
         </div>
       </div>
       
@@ -98,7 +99,7 @@ const Confirmation = () => {
         <div className="text-center mb-8">
           <div className="flex items-center justify-center mb-6">
             <div className="bg-gradient-to-r from-blue-500 to-purple-600 p-4 rounded-2xl shadow-lg">
-              <Mic className="h-10 w-10 text-white" />
+              <Logo size="lg" animated={true} />
             </div>
           </div>
           <h1 className="text-4xl font-bold text-white mb-3">Verify Your Email</h1>

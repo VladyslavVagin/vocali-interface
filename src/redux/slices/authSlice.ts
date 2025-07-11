@@ -3,11 +3,20 @@ import type { PayloadAction } from '@reduxjs/toolkit'
 import api from '../../services/api'
 
 interface User {
-  id: string
+  sub: string
   email: string
+  name: string
   firstName: string
   lastName: string
-  name?: string // For backward compatibility
+  username: string
+  emailVerified: boolean
+  userStatus: string
+  enabled: boolean
+  tokenUse: string
+  scope: string
+  authTime: number
+  issuedAt: number
+  expiresAt: number
 }
 
 interface AuthState {
@@ -20,10 +29,22 @@ interface AuthState {
   confirmationEmail: string | null
 }
 
+// Clean up invalid tokens from localStorage
+const storedToken = localStorage.getItem('token')
+if (storedToken === 'undefined' || storedToken === 'null' || storedToken === '') {
+  localStorage.removeItem('token')
+  console.log('Cleaned up invalid token from localStorage')
+}
+
+const getStoredToken = () => {
+  const token = localStorage.getItem('token')
+  return token && token !== 'undefined' && token !== 'null' && token !== '' ? token : null
+}
+
 const initialState: AuthState = {
   user: null,
-  token: localStorage.getItem('token'),
-  isAuthenticated: !!localStorage.getItem('token'),
+  token: getStoredToken(),
+  isAuthenticated: getStoredToken() !== null,
   loading: false,
   error: null,
   needsConfirmation: false,
@@ -36,9 +57,25 @@ export const signin = createAsyncThunk(
   async (credentials: { email: string; password: string }, { rejectWithValue }) => {
     try {
       const response = await api.post('/auth/signin', credentials)
-      const { token, user } = response.data
-      localStorage.setItem('token', token)
-      return { token, user }
+      const { accessToken, refreshToken, username } = response.data
+      console.log('Signin response:', { 
+        accessToken: accessToken ? 'valid' : 'invalid', 
+        refreshToken: refreshToken ? 'valid' : 'invalid',
+        username 
+      })
+      
+      // Store both tokens
+      if (accessToken && accessToken !== 'undefined') {
+        localStorage.setItem('token', accessToken)
+        localStorage.setItem('refreshToken', refreshToken)
+        console.log('Tokens stored in localStorage')
+      } else {
+        console.log('Invalid tokens received:', { accessToken, refreshToken })
+      }
+      
+      // Don't create user object here - let getProfile fetch the real user data
+      // The user object will be populated when getProfile is called
+      return { token: accessToken, user: null }
     } catch (error: any) {
       return rejectWithValue(error.response?.data?.message || 'Sign in failed')
     }
@@ -62,9 +99,17 @@ export const confirmSignup = createAsyncThunk(
   async (data: { email: string; confirmationCode: string }, { rejectWithValue }) => {
     try {
       const response = await api.post('/auth/confirm-signup', data)
-      const { token, user } = response.data
-      localStorage.setItem('token', token)
-      return { token, user }
+      const { accessToken, refreshToken, username } = response.data
+      
+      // Store both tokens
+      if (accessToken && accessToken !== 'undefined') {
+        localStorage.setItem('token', accessToken)
+        localStorage.setItem('refreshToken', refreshToken)
+      }
+      
+      // Don't create user object here - let getProfile fetch the real user data
+      // The user object will be populated when getProfile is called
+      return { token: accessToken, user: null }
     } catch (error: any) {
       return rejectWithValue(error.response?.data?.message || 'Confirmation failed')
     }
@@ -111,9 +156,11 @@ export const logout = createAsyncThunk('auth/logout', async (_, { rejectWithValu
   try {
     await api.post('/auth/logout')
     localStorage.removeItem('token')
+    localStorage.removeItem('refreshToken')
     return { success: true }
   } catch (error: any) {
     localStorage.removeItem('token')
+    localStorage.removeItem('refreshToken')
     return { success: true }
   }
 })
@@ -123,8 +170,10 @@ export const getProfile = createAsyncThunk(
   async (_, { rejectWithValue }) => {
     try {
       const response = await api.get('/auth/me')
-      return response.data
+      console.log('Profile response:', response.data)
+      return response.data.user
     } catch (error: any) {
+      // Don't logout on profile fetch failure, just return the error
       return rejectWithValue(error.response?.data?.message || 'Failed to get profile')
     }
   }
@@ -149,12 +198,16 @@ const authSlice = createSlice({
         state.loading = true
         state.error = null
       })
-      .addCase(signin.fulfilled, (state, action: PayloadAction<{ token: string; user: User }>) => {
+      .addCase(signin.fulfilled, (state, action: PayloadAction<{ token: string; user: User | null }>) => {
         state.loading = false
         state.isAuthenticated = true
         state.user = action.payload.user
         state.token = action.payload.token
         state.needsConfirmation = false
+        // Ensure token is stored in localStorage
+        if (action.payload.token && action.payload.token !== 'undefined') {
+          localStorage.setItem('token', action.payload.token)
+        }
       })
       .addCase(signin.rejected, (state, action) => {
         state.loading = false
@@ -179,13 +232,17 @@ const authSlice = createSlice({
         state.loading = true
         state.error = null
       })
-      .addCase(confirmSignup.fulfilled, (state, action: PayloadAction<{ token: string; user: User }>) => {
+      .addCase(confirmSignup.fulfilled, (state, action: PayloadAction<{ token: string; user: User | null }>) => {
         state.loading = false
         state.isAuthenticated = true
         state.user = action.payload.user
         state.token = action.payload.token
         state.needsConfirmation = false
         state.confirmationEmail = null
+        // Ensure token is stored in localStorage
+        if (action.payload.token && action.payload.token !== 'undefined') {
+          localStorage.setItem('token', action.payload.token)
+        }
       })
       .addCase(confirmSignup.rejected, (state, action) => {
         state.loading = false
