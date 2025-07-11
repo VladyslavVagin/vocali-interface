@@ -33,7 +33,6 @@ interface AuthState {
 const storedToken = localStorage.getItem('token')
 if (storedToken === 'undefined' || storedToken === 'null' || storedToken === '') {
   localStorage.removeItem('token')
-  console.log('Cleaned up invalid token from localStorage')
 }
 
 const getStoredToken = () => {
@@ -58,19 +57,11 @@ export const signin = createAsyncThunk(
     try {
       const response = await api.post('/auth/signin', credentials)
       const { accessToken, refreshToken, username } = response.data
-      console.log('Signin response:', { 
-        accessToken: accessToken ? 'valid' : 'invalid', 
-        refreshToken: refreshToken ? 'valid' : 'invalid',
-        username 
-      })
       
       // Store both tokens
       if (accessToken && accessToken !== 'undefined') {
         localStorage.setItem('token', accessToken)
         localStorage.setItem('refreshToken', refreshToken)
-        console.log('Tokens stored in localStorage')
-      } else {
-        console.log('Invalid tokens received:', { accessToken, refreshToken })
       }
       
       // Don't create user object here - let getProfile fetch the real user data
@@ -170,7 +161,6 @@ export const getProfile = createAsyncThunk(
   async (_, { rejectWithValue }) => {
     try {
       const response = await api.get('/auth/me')
-      console.log('Profile response:', response.data)
       return response.data.user
     } catch (error: any) {
       // Don't logout on profile fetch failure, just return the error

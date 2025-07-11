@@ -43,7 +43,6 @@ const Favorites = () => {
 
   const handlePlay = (command: FavoriteCommand) => {
     // TODO: Implement voice command execution
-    console.log('Executing command:', command.command)
   }
 
   return (

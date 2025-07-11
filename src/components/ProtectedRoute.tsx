@@ -24,7 +24,6 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
 
   // If not authenticated, redirect to login
   if (!isAuthenticated || !token || token === 'undefined' || token === 'null') {
-    console.log('ProtectedRoute: Redirecting to login - not authenticated')
     return <Navigate to="/auth#login" replace />
   }
 

@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
 import { useNavigate } from 'react-router-dom'
-import { LogOut, Heart, Mic, Settings, User, Mail, Loader2 } from 'lucide-react'
+import { LogOut, Heart, User, Mail, Loader2 } from 'lucide-react'
 import { logout, getProfile } from '../redux/slices/authSlice'
 import type { RootState, AppDispatch } from '../redux/store'
 import Logo from '../components/Logo'
@@ -12,13 +12,9 @@ const Main = () => {
   const { user, isAuthenticated, token, loading } = useSelector((state: RootState) => state.auth)
   const hasFetchedProfile = useRef(false)
 
-  // Debug logging
-  console.log('Main component state:', { user, isAuthenticated, token, loading })
-
   useEffect(() => {
     // Only fetch profile if we have a valid token but no user data and haven't fetched yet
     if (token && token !== 'undefined' && token !== 'null' && isAuthenticated && !user && !hasFetchedProfile.current) {
-      console.log('Fetching profile...')
       hasFetchedProfile.current = true
       dispatch(getProfile())
     }
@@ -27,7 +23,6 @@ const Main = () => {
   useEffect(() => {
     // If not authenticated or token is invalid, redirect to login
     if (!isAuthenticated || !token || token === 'undefined' || token === 'null') {
-      console.log('Redirecting to login...')
       hasFetchedProfile.current = false
       navigate('/auth#login')
     }
@@ -100,23 +95,9 @@ const Main = () => {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {/* Voice Interface Card */}
-          <div className="bg-white rounded-2xl shadow-lg p-6 hover:shadow-xl transition-shadow">
-            <div className="flex items-center justify-center w-16 h-16 bg-blue-100 rounded-full mb-4">
-              <Mic className="h-8 w-8 text-blue-600" />
-            </div>
-            <h3 className="text-xl font-semibold text-gray-800 mb-2">Voice Interface</h3>
-            <p className="text-gray-600 mb-4">
-              Start your voice interaction with Vocali. Click the microphone to begin.
-            </p>
-            <button className="w-full bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-semibold py-3 px-6 rounded-lg hover:from-blue-600 hover:to-indigo-700 transition-all duration-200">
-              Start Voice Session
-            </button>
-          </div>
-
+        <div className="flex justify-center">
           {/* Favorites Card */}
-          <div className="bg-white rounded-2xl shadow-lg p-6 hover:shadow-xl transition-shadow">
+          <div className="bg-white rounded-2xl shadow-lg p-6 hover:shadow-xl transition-shadow max-w-md">
             <div className="flex items-center justify-center w-16 h-16 bg-red-100 rounded-full mb-4">
               <Heart className="h-8 w-8 text-red-600" />
             </div>
@@ -129,20 +110,6 @@ const Main = () => {
               className="w-full bg-gradient-to-r from-red-500 to-pink-600 text-white font-semibold py-3 px-6 rounded-lg hover:from-red-600 hover:to-pink-700 transition-all duration-200"
             >
               View Favorites
-            </button>
-          </div>
-
-          {/* Settings Card */}
-          <div className="bg-white rounded-2xl shadow-lg p-6 hover:shadow-xl transition-shadow">
-            <div className="flex items-center justify-center w-16 h-16 bg-gray-100 rounded-full mb-4">
-              <Settings className="h-8 w-8 text-gray-600" />
-            </div>
-            <h3 className="text-xl font-semibold text-gray-800 mb-2">Settings</h3>
-            <p className="text-gray-600 mb-4">
-              Configure your voice preferences and account settings.
-            </p>
-            <button className="w-full bg-gradient-to-r from-gray-500 to-gray-600 text-white font-semibold py-3 px-6 rounded-lg hover:from-gray-600 hover:to-gray-700 transition-all duration-200">
-              Open Settings
             </button>
           </div>
         </div>

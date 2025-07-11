@@ -17,13 +17,8 @@ const Login = () => {
   const navigate = useNavigate()
   const { loading, error, isAuthenticated, token } = useSelector((state: RootState) => state.auth)
 
-  // Debug logging
-  console.log('Login component state:', { isAuthenticated, token, loading })
-
   useEffect(() => {
-    console.log('Login useEffect triggered:', { isAuthenticated, token })
     if (isAuthenticated && token && token !== 'undefined' && token !== 'null') {
-      console.log('Navigating to main page...')
       navigate('/')
     }
   }, [isAuthenticated, token, navigate])
