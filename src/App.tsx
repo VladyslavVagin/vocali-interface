@@ -4,7 +4,6 @@ import { store } from './redux/store'
 import ProtectedRoute from './components/ProtectedRoute'
 import Auth from './pages/Auth'
 import Main from './pages/Main'
-import Favorites from './pages/Favorites'
 
 function App() {
   return (
@@ -23,14 +22,7 @@ function App() {
               </ProtectedRoute>
             } 
           />
-          <Route 
-            path="/favorites" 
-            element={
-              <ProtectedRoute>
-                <Favorites />
-              </ProtectedRoute>
-            } 
-          />
+
           
           {/* Redirect to auth if no route matches */}
           <Route path="*" element={<Navigate to="/auth#login" replace />} />

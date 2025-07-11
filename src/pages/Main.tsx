@@ -1,11 +1,43 @@
 import { useEffect, useRef, useState } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
 import { useNavigate } from 'react-router-dom'
-import { LogOut, Heart, User, Mail, Loader2, Upload, AlertCircle } from 'lucide-react'
+import { LogOut, User, Mail, Loader2, Upload, AlertCircle, Play, FileAudio, Download, FileText } from 'lucide-react'
 import { logout, getProfile } from '../redux/slices/authSlice'
 import type { RootState, AppDispatch } from '../redux/store'
 import Logo from '../components/Logo'
 import api from '../services/api'
+
+interface AudioFile {
+  userId: string
+  fileKey: string
+  fileName: string
+  fileSize: number
+  duration: number
+  format: string
+  uploadedAt: string
+  lastModified: string
+  status: string
+  metadata: {
+    originalName: string
+    duration: number
+    extension: string
+    transcription: {
+      language: string
+      text: string
+      status: string
+      completedAt?: string
+      wordCount?: number
+      method?: string
+      confidence?: number
+      characterCount?: number
+    }
+    fileSize: number
+    format: string
+    uploadedAt: string
+    mimeType: string
+  }
+  downloadUrl: string
+}
 
 const Main = () => {
   const dispatch = useDispatch<AppDispatch>()
@@ -14,6 +46,10 @@ const Main = () => {
   const hasFetchedProfile = useRef(false)
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
+  const [audioFiles, setAudioFiles] = useState<AudioFile[]>([])
+  const [loadingFiles, setLoadingFiles] = useState(false)
+  const [playingAudio, setPlayingAudio] = useState<string | null>(null)
+  const [audioElements, setAudioElements] = useState<{ [key: string]: HTMLAudioElement }>({})
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -83,15 +119,8 @@ const Main = () => {
       // Handle successful upload
       const uploadResult = response.data
       
-      // Store upload result - you can extend this to save to Redux state
-      // For now, we'll just log the successful upload
-      // In the future, you might want to:
-      // - Save to Redux state for audio processing
-      // - Navigate to audio analysis page
-      // - Show success notification
-      
-      // Example: You could dispatch an action to save the upload result
-      // dispatch(saveAudioUpload(uploadResult))
+      // Refresh the audio files list after successful upload
+      await fetchAudioFiles()
       
     } catch (error: any) {
       console.error('Upload error:', error.response?.data || error.message)
@@ -109,6 +138,84 @@ const Main = () => {
   const handleUploadClick = () => {
     fileInputRef.current?.click()
   }
+
+  const handlePlayPause = (fileKey: string, downloadUrl: string) => {
+    if (playingAudio === fileKey) {
+      // Pause current audio
+      const audio = audioElements[fileKey]
+      if (audio) {
+        audio.pause()
+        setPlayingAudio(null)
+      }
+    } else {
+      // Stop any currently playing audio
+      if (playingAudio && audioElements[playingAudio]) {
+        audioElements[playingAudio].pause()
+      }
+
+      // Play new audio
+      let audio = audioElements[fileKey]
+      if (!audio) {
+        audio = new Audio(downloadUrl)
+        audio.addEventListener('ended', () => {
+          setPlayingAudio(null)
+        })
+        setAudioElements(prev => ({ ...prev, [fileKey]: audio }))
+      }
+
+      audio.play()
+      setPlayingAudio(fileKey)
+    }
+  }
+
+  const handleDownloadText = (fileName: string, transcriptionText: string) => {
+    // Create a blob with the transcription text
+    const blob = new Blob([transcriptionText], { type: 'text/plain' })
+    const url = window.URL.createObjectURL(blob)
+    
+    // Create download link
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${fileName.replace(/\.[^/.]+$/, '')}_transcription.txt`
+    document.body.appendChild(a)
+    a.click()
+    
+    // Cleanup
+    window.URL.revokeObjectURL(url)
+    document.body.removeChild(a)
+  }
+
+  const fetchAudioFiles = async () => {
+    setLoadingFiles(true)
+    try {
+      const response = await api.get('/audio/files')
+      setAudioFiles(response.data)
+    } catch (error: any) {
+      console.error('Failed to fetch audio files:', error)
+    } finally {
+      setLoadingFiles(false)
+    }
+  }
+
+  // Fetch audio files when component mounts
+  useEffect(() => {
+    if (isAuthenticated && token) {
+      fetchAudioFiles()
+    }
+  }, [isAuthenticated, token])
+
+  // Cleanup audio when component unmounts
+  useEffect(() => {
+    return () => {
+      // Stop all audio when component unmounts
+      Object.values(audioElements).forEach(audio => {
+        audio.pause()
+        audio.currentTime = 0
+      })
+    }
+  }, [audioElements])
+
+
 
   // Show loading while fetching profile (only if we're authenticated and have a token)
   if (loading && !user && isAuthenticated && token && token !== 'undefined' && token !== 'null') {
@@ -171,9 +278,9 @@ const Main = () => {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="flex flex-col items-center space-y-6">
+        <div className="space-y-8">
           {/* Upload Audio Card */}
-          <div className="bg-white rounded-2xl shadow-lg p-6 hover:shadow-xl transition-shadow max-w-md w-full">
+          <div className="bg-white rounded-2xl shadow-lg p-6 hover:shadow-xl transition-shadow max-w-md mx-auto">
             <div className="flex items-center justify-center w-16 h-16 bg-blue-100 rounded-full mb-4">
               <Upload className="h-8 w-8 text-blue-600" />
             </div>
@@ -232,21 +339,115 @@ const Main = () => {
             )}
           </div>
 
-          {/* Favorites Card */}
-          <div className="bg-white rounded-2xl shadow-lg p-6 hover:shadow-xl transition-shadow max-w-md w-full">
-            <div className="flex items-center justify-center w-16 h-16 bg-red-100 rounded-full mb-4">
-              <Heart className="h-8 w-8 text-red-600" />
+          {/* Audio Files List */}
+          <div className="bg-white rounded-2xl shadow-lg p-6">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center space-x-3">
+                <FileAudio className="h-6 w-6 text-blue-600" />
+                <h2 className="text-2xl font-bold text-gray-800">Your Audio Files</h2>
+              </div>
+              {loadingFiles && (
+                <div className="flex items-center space-x-2 text-gray-600">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span className="text-sm">Loading...</span>
+                </div>
+              )}
             </div>
-            <h3 className="text-xl font-semibold text-gray-800 mb-2">Favorites</h3>
-            <p className="text-gray-600 mb-4">
-              Access your saved voice commands and favorite interactions.
-            </p>
-            <button 
-              onClick={() => navigate('/favorites')}
-              className="w-full bg-gradient-to-r from-red-500 to-pink-600 text-white font-semibold py-3 px-6 rounded-lg hover:from-red-600 hover:to-pink-700 transition-all duration-200"
-            >
-              View Favorites
-            </button>
+
+            {audioFiles.length === 0 && !loadingFiles ? (
+              <div className="text-center py-12">
+                <FileAudio className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                <h3 className="text-xl font-semibold text-gray-600 mb-2">No audio files yet</h3>
+                <p className="text-gray-500">Upload your first audio file to get started</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {audioFiles.map((file) => (
+                  <div key={file.fileKey} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-4">
+                        <div className="flex items-center justify-center w-12 h-12 bg-blue-100 rounded-lg">
+                          <FileAudio className="h-6 w-6 text-blue-600" />
+                        </div>
+                                                 <div className="flex-1">
+                           <h3 className="font-semibold text-gray-800">{file.metadata.originalName}</h3>
+                           <div className="flex items-center space-x-4 text-sm text-gray-500 mt-1">
+                             <span>{file.metadata.format}</span>
+                             <span>•</span>
+                             <span>{Math.round(file.fileSize / 1024)} KB</span>
+                             <span>•</span>
+                             <span>{file.duration}s</span>
+                             {file.metadata.transcription?.status && (
+                               <>
+                                 <span>•</span>
+                                 <span className={`px-2 py-1 rounded-full text-xs ${
+                                   file.metadata.transcription.status === 'completed' 
+                                     ? 'bg-green-100 text-green-700'
+                                     : file.metadata.transcription.status === 'processing'
+                                     ? 'bg-yellow-100 text-yellow-700'
+                                     : file.metadata.transcription.status === 'failed'
+                                     ? 'bg-red-100 text-red-700'
+                                     : 'bg-gray-100 text-gray-700'
+                                 }`}>
+                                   {file.metadata.transcription.status}
+                                 </span>
+                               </>
+                             )}
+                           </div>
+                           {file.metadata.transcription?.text && file.metadata.transcription.text.trim() !== '' && (
+                             <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                               <div className="flex items-center justify-between mb-2">
+                                 <div className="flex items-center space-x-2">
+                                   <FileText className="h-4 w-4 text-blue-600" />
+                                   <span className="text-sm font-medium text-blue-800">Transcription</span>
+                                   {file.metadata.transcription?.status !== 'completed' && (
+                                                                            <span className="text-xs text-orange-600 bg-orange-100 px-2 py-1 rounded-full">
+                                         {file.metadata.transcription?.status}
+                                       </span>
+                                   )}
+                                 </div>
+                                 <button
+                                   onClick={() => handleDownloadText(file.metadata.originalName, file.metadata.transcription.text)}
+                                   className="p-1 text-blue-600 hover:text-blue-700 hover:bg-blue-100 rounded transition-colors"
+                                   title="Download transcription"
+                                 >
+                                   <Download className="h-4 w-4" />
+                                 </button>
+                               </div>
+                               <p className="text-sm text-gray-700 leading-relaxed">
+                                 "{file.metadata.transcription.text}"
+                               </p>
+                             </div>
+                           )}
+                         </div>
+                       </div>
+                       <div className="flex items-center">
+                         <button
+                           onClick={() => handlePlayPause(file.fileKey, file.downloadUrl)}
+                           className={`p-2 transition-all duration-200 rounded-lg ${
+                             playingAudio === file.fileKey 
+                               ? 'bg-red-500 hover:bg-red-600 text-white shadow-lg' 
+                               : 'text-gray-600 hover:text-green-600 hover:bg-green-50'
+                           }`}
+                           title={playingAudio === file.fileKey ? 'Pause' : 'Play'}
+                         >
+                           {playingAudio === file.fileKey ? (
+                             <div className="h-5 w-5 flex items-center justify-center">
+                               <div className="flex space-x-1">
+                                 <div className="w-1 h-4 bg-white rounded-sm"></div>
+                                 <div className="w-1 h-4 bg-white rounded-sm"></div>
+                               </div>
+                             </div>
+                           ) : (
+                             <Play className="h-5 w-5" />
+                           )}
+                         </button>
+                       </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
