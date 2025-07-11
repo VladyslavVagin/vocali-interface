@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
 import { useNavigate } from 'react-router-dom'
-import { LogOut, User, Mail, Loader2, Upload, AlertCircle, Play, FileAudio, Download, FileText } from 'lucide-react'
+import { LogOut, User, Mail, Loader2, Upload, AlertCircle, Play, FileAudio, Download, FileText, Mic } from 'lucide-react'
 import { logout, getProfile } from '../redux/slices/authSlice'
 import type { RootState, AppDispatch } from '../redux/store'
 import Logo from '../components/Logo'
+import RealTimeRecording from '../components/RealTimeRecording'
 import api from '../services/api'
 
 interface AudioFile {
@@ -50,6 +51,7 @@ const Main = () => {
   const [loadingFiles, setLoadingFiles] = useState(false)
   const [playingAudio, setPlayingAudio] = useState<string | null>(null)
   const [audioElements, setAudioElements] = useState<{ [key: string]: HTMLAudioElement }>({})
+  const [showRealTimeRecording, setShowRealTimeRecording] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -185,6 +187,17 @@ const Main = () => {
     document.body.removeChild(a)
   }
 
+  const handleRealTimeTranscriptionComplete = (transcriptionText: string) => {
+    // Here you could save the transcription to your backend
+    console.log('Real-time transcription completed:', transcriptionText)
+    // You could also show a success message or save it to the audio files list
+  }
+
+  const handleRealTimeError = (error: string) => {
+    console.error('Real-time recording error:', error)
+    // You could show a toast notification here
+  }
+
   const fetchAudioFiles = async () => {
     setLoadingFiles(true)
     try {
@@ -279,65 +292,97 @@ const Main = () => {
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="space-y-8">
-          {/* Upload Audio Card */}
-          <div className="bg-white rounded-2xl shadow-lg p-6 hover:shadow-xl transition-shadow max-w-md mx-auto">
-            <div className="flex items-center justify-center w-16 h-16 bg-blue-100 rounded-full mb-4">
-              <Upload className="h-8 w-8 text-blue-600" />
-            </div>
-            <h3 className="text-xl font-semibold text-gray-800 mb-2">Upload Audio</h3>
-            <p className="text-gray-600 mb-4">
-              Upload your audio file for voice processing and analysis.
-            </p>
-            
-            {/* Hidden file input */}
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="audio/*"
-              onChange={handleFileUpload}
-              className="hidden"
-            />
-            
-            {/* Upload button with tooltip */}
-            <div className="relative group">
-              <button 
-                onClick={handleUploadClick}
-                disabled={uploading}
-                className="w-full bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-semibold py-3 px-6 rounded-lg hover:from-blue-600 hover:to-indigo-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
-              >
-                {uploading ? (
-                  <>
-                    <Loader2 className="h-5 w-5 animate-spin" />
-                    <span>Uploading...</span>
-                  </>
-                ) : (
-                  <>
-                    <Upload className="h-5 w-5" />
-                    <span>Upload Audio</span>
-                  </>
-                )}
-              </button>
+          {/* Audio Recording Options */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto">
+            {/* Upload Audio Card */}
+            <div className="bg-white rounded-2xl shadow-lg p-6 hover:shadow-xl transition-shadow">
+              <div className="flex items-center justify-center w-16 h-16 bg-blue-100 rounded-full mb-4">
+                <Upload className="h-8 w-8 text-blue-600" />
+              </div>
+              <h3 className="text-xl font-semibold text-gray-800 mb-2">Upload Audio</h3>
+              <p className="text-gray-600 mb-4">
+                Upload your audio file for voice processing and analysis.
+              </p>
               
-              {/* Tooltip */}
-              <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap">
-                <div className="flex items-center space-x-1">
-                  <AlertCircle className="h-4 w-4" />
-                  <span>Maximum 20 MB audio files</span>
+              {/* Hidden file input */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="audio/*"
+                onChange={handleFileUpload}
+                className="hidden"
+              />
+              
+              {/* Upload button with tooltip */}
+              <div className="relative group">
+                <button 
+                  onClick={handleUploadClick}
+                  disabled={uploading}
+                  className="w-full bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-semibold py-3 px-6 rounded-lg hover:from-blue-600 hover:to-indigo-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+                >
+                  {uploading ? (
+                    <>
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                      <span>Uploading...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="h-5 w-5" />
+                      <span>Upload Audio</span>
+                    </>
+                  )}
+                </button>
+                
+                {/* Tooltip */}
+                <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap">
+                  <div className="flex items-center space-x-1">
+                    <AlertCircle className="h-4 w-4" />
+                    <span>Maximum 20 MB audio files</span>
+                  </div>
+                  <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
                 </div>
-                <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
               </div>
+              
+              {/* Error message */}
+              {uploadError && (
+                <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+                  <div className="flex items-center space-x-2">
+                    <AlertCircle className="h-4 w-4 text-red-500" />
+                    <span className="text-sm text-red-600">{uploadError}</span>
+                  </div>
+                </div>
+              )}
             </div>
-            
-            {/* Error message */}
-            {uploadError && (
-              <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
-                <div className="flex items-center space-x-2">
-                  <AlertCircle className="h-4 w-4 text-red-500" />
-                  <span className="text-sm text-red-600">{uploadError}</span>
-                </div>
+
+            {/* Real-Time Recording Card */}
+            <div className="bg-white rounded-2xl shadow-lg p-6 hover:shadow-xl transition-shadow">
+              <div className="flex items-center justify-center w-16 h-16 bg-purple-100 rounded-full mb-4">
+                <Mic className="h-8 w-8 text-purple-600" />
               </div>
-            )}
+              <h3 className="text-xl font-semibold text-gray-800 mb-2">Real-Time Recording</h3>
+              <p className="text-gray-600 mb-4">
+                Record audio directly from your microphone with live transcription.
+              </p>
+              
+              <button 
+                onClick={() => setShowRealTimeRecording(!showRealTimeRecording)}
+                className="w-full bg-gradient-to-r from-purple-500 to-pink-600 text-white font-semibold py-3 px-6 rounded-lg hover:from-purple-600 hover:to-pink-700 transition-all duration-200 flex items-center justify-center space-x-2"
+              >
+                <Mic className="h-5 w-5" />
+                <span>{showRealTimeRecording ? 'Hide Recorder' : 'Start Recording'}</span>
+              </button>
+            </div>
           </div>
+
+          {/* Real-Time Recording Interface */}
+          {showRealTimeRecording && (
+            <div className="max-w-2xl mx-auto">
+              <RealTimeRecording 
+                onTranscriptionComplete={handleRealTimeTranscriptionComplete}
+                onError={handleRealTimeError}
+              />
+            </div>
+          )}
 
           {/* Audio Files List */}
           <div className="bg-white rounded-2xl shadow-lg p-6">

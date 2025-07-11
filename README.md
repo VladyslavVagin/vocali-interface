@@ -9,6 +9,9 @@ A modern voice interface platform built with React.js, TypeScript, Tailwind CSS,
 - **Vite** for fast development and building
 - **Modern UI** with beautiful gradients and animations
 - **Hot Module Replacement (HMR)** for instant updates
+- **Real-time Audio Recording** with live transcription using Speechmatics
+- **Audio File Upload** with transcription processing
+- **User Authentication** with Redux state management
 
 ## 🛠️ Tech Stack
 
@@ -17,6 +20,10 @@ A modern voice interface platform built with React.js, TypeScript, Tailwind CSS,
 - **Styling**: Tailwind CSS
 - **Build Tool**: Vite
 - **Package Manager**: npm
+- **State Management**: Redux Toolkit
+- **Real-time Transcription**: Speechmatics API
+- **HTTP Client**: Axios
+- **Icons**: Lucide React
 
 ## 📦 Installation
 
@@ -32,6 +39,21 @@ npm install
 ```
 
 ## 🚀 Development
+
+### Environment Variables
+
+Create a `.env` file in the root directory with the following variables:
+
+```bash
+# API Configuration
+VITE_API_BASE_URL=http://localhost:3000/api
+
+# Speechmatics Configuration
+# Get your API key from: https://portal.speechmatics.com/
+VITE_SPEECHMATICS_API_KEY=your_speechmatics_api_key_here
+```
+
+### Start Development Server
 
 Start the development server:
 ```bash
