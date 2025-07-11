@@ -1,4 +1,3 @@
-import { useEffect } from 'react'
 import { Navigate } from 'react-router-dom'
 import { useSelector } from 'react-redux'
 import { Loader2 } from 'lucide-react'
@@ -10,9 +9,6 @@ interface ProtectedRouteProps {
 
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
   const { isAuthenticated, token, loading } = useSelector((state: RootState) => state.auth)
-
-  // Debug logging
-  console.log('ProtectedRoute state:', { isAuthenticated, token, loading })
 
   // Show loading while checking authentication
   if (loading) {
