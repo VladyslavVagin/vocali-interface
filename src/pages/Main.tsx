@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
 import { useNavigate } from 'react-router-dom'
-import { LogOut, User, Mail, Loader2, Upload, AlertCircle, Play, FileAudio, Download, FileText, Mic } from 'lucide-react'
+import { LogOut, User, Mail, Loader2, Upload, AlertCircle, Play, FileAudio, Download, FileText, Mic, Trash2 } from 'lucide-react'
 import { logout, getProfile } from '../redux/slices/authSlice'
 import type { RootState, AppDispatch } from '../redux/store'
 import Logo from '../components/Logo'
@@ -52,6 +52,7 @@ const Main = () => {
   const [playingAudio, setPlayingAudio] = useState<string | null>(null)
   const [audioElements, setAudioElements] = useState<{ [key: string]: HTMLAudioElement }>({})
   const [showRealTimeRecording, setShowRealTimeRecording] = useState(false)
+  const [deletingFiles, setDeletingFiles] = useState<{ [key: string]: boolean }>({})
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -185,6 +186,56 @@ const Main = () => {
     // Cleanup
     window.URL.revokeObjectURL(url)
     document.body.removeChild(a)
+  }
+
+  const handleDeleteAudio = async (fileKey: string, fileName: string) => {
+    // Confirm deletion
+    if (!window.confirm(`Are you sure you want to delete "${fileName}"? This action cannot be undone.`)) {
+      return
+    }
+
+    // Set deleting state for this file
+    setDeletingFiles(prev => ({ ...prev, [fileKey]: true }))
+
+    try {
+      // Stop audio if it's playing
+      if (playingAudio === fileKey) {
+        const audio = audioElements[fileKey]
+        if (audio) {
+          audio.pause()
+          setPlayingAudio(null)
+        }
+      }
+
+      // Delete the file
+      await api.delete(`/audio/files?fileKey=${encodeURIComponent(fileKey)}`)
+      
+      // Remove from local state
+      setAudioFiles(prev => prev.filter(file => file.fileKey !== fileKey))
+      
+      // Clean up audio element
+      if (audioElements[fileKey]) {
+        audioElements[fileKey].pause()
+        setAudioElements(prev => {
+          const newElements = { ...prev }
+          delete newElements[fileKey]
+          return newElements
+        })
+      }
+
+      console.log('Audio file deleted successfully:', fileKey)
+      
+    } catch (error: any) {
+      console.error('Failed to delete audio file:', error)
+      alert('Failed to delete file: ' + (error.response?.data?.message || error.message))
+    } finally {
+      // Clear deleting state
+      setDeletingFiles(prev => {
+        const newState = { ...prev }
+        delete newState[fileKey]
+        return newState
+      })
+    }
   }
 
   const handleRealTimeTranscriptionComplete = async (transcriptionText: string, audioBlob?: Blob) => {
@@ -512,7 +563,7 @@ const Main = () => {
                            )}
                          </div>
                        </div>
-                       <div className="flex items-center">
+                       <div className="flex items-center space-x-2">
                          <button
                            onClick={() => handlePlayPause(file.fileKey, file.downloadUrl)}
                            className={`p-2 transition-all duration-200 rounded-lg ${
@@ -531,6 +582,23 @@ const Main = () => {
                              </div>
                            ) : (
                              <Play className="h-5 w-5" />
+                           )}
+                         </button>
+                         
+                         <button
+                           onClick={() => handleDeleteAudio(file.fileKey, file.metadata.originalName)}
+                           disabled={deletingFiles[file.fileKey]}
+                           className={`p-2 transition-all duration-200 rounded-lg ${
+                             deletingFiles[file.fileKey]
+                               ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                               : 'text-gray-600 hover:text-red-600 hover:bg-red-50'
+                           }`}
+                           title="Delete audio file"
+                         >
+                           {deletingFiles[file.fileKey] ? (
+                             <Loader2 className="h-5 w-5 animate-spin" />
+                           ) : (
+                             <Trash2 className="h-5 w-5" />
                            )}
                          </button>
                        </div>
