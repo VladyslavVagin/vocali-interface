@@ -2,13 +2,15 @@ import { useState, useRef, useEffect } from 'react'
 import { Mic, MicOff, Square, Loader2, AlertCircle, Play, Pause, Save, RotateCcw } from 'lucide-react'
 
 interface RealTimeRecordingProps {
-  onTranscriptionComplete: (text: string, audioBlob?: Blob) => void
+  onTranscriptionComplete: (text: string, audioBlob?: Blob) => Promise<void>
   onError: (error: string) => void
+  isSaving?: boolean
 }
 
 const RealTimeRecording: React.FC<RealTimeRecordingProps> = ({ 
   onTranscriptionComplete, 
-  onError 
+  onError,
+  isSaving = false
 }) => {
   const [isRecording, setIsRecording] = useState(false)
   const [isConnecting, setIsConnecting] = useState(false)
@@ -236,15 +238,20 @@ const RealTimeRecording: React.FC<RealTimeRecordingProps> = ({
     }
   }
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (finalTranscription) {
-      onTranscriptionComplete(finalTranscription, audioBlob || undefined)
-      // Reset state
-      setShowPlayback(false)
-      setFinalTranscription('')
-      setTranscription('')
-      setAudioBlob(null)
-      setAudioUrl(null)
+      try {
+        await onTranscriptionComplete(finalTranscription, audioBlob || undefined)
+        // Reset state only after successful save
+        setShowPlayback(false)
+        setFinalTranscription('')
+        setTranscription('')
+        setAudioBlob(null)
+        setAudioUrl(null)
+      } catch (error) {
+        console.error('Failed to save recording:', error)
+        // Don't reset state on error, let user retry
+      }
     }
   }
 
@@ -385,6 +392,7 @@ const RealTimeRecording: React.FC<RealTimeRecordingProps> = ({
       audioElementRef={audioElementRef}
       accumulatedTranscript={accumulatedTranscript}
       setAccumulatedTranscript={setAccumulatedTranscript}
+      isSaving={isSaving}
     />
   )
 }
@@ -402,10 +410,10 @@ interface RecordingInterfaceProps {
   audioUrl: string | null
   onStartRecording: () => void
   onStopRecording: () => void
-  onTranscriptionComplete: (text: string) => void
+  onTranscriptionComplete: (text: string) => Promise<void>
   onError: (error: string) => void
   onPlayPause: () => void
-  onSave: () => void
+  onSave: () => Promise<void>
   onRerecord: () => void
   setFinalTranscription: (text: string) => void
   setIsPlaying: (playing: boolean) => void
@@ -418,6 +426,7 @@ interface RecordingInterfaceProps {
   setTranscription: (text: string) => void
   setConnectionStatus: (status: string) => void
   audioElementRef: React.MutableRefObject<HTMLAudioElement | null>
+  isSaving?: boolean
 }
 
 const RecordingInterface: React.FC<RecordingInterfaceProps> = ({
@@ -448,7 +457,8 @@ const RecordingInterface: React.FC<RecordingInterfaceProps> = ({
   setConnectionStatus,
   audioElementRef,
   accumulatedTranscript,
-  setAccumulatedTranscript
+  setAccumulatedTranscript,
+  isSaving = false
 }) => {
 
   const [localIsRecording, setLocalIsRecording] = useState(isRecording)
@@ -731,6 +741,11 @@ const RecordingInterface: React.FC<RecordingInterfaceProps> = ({
     return finalText;
   }
 
+  // Ensure save is awaited so loading indicator works
+  const handleSave = async () => {
+    await onSave();
+  };
+
   return (
     <div className="bg-white rounded-2xl shadow-lg p-6">
       <div className="text-center mb-6">
@@ -864,18 +879,38 @@ const RecordingInterface: React.FC<RecordingInterfaceProps> = ({
             onPause={() => setIsPlaying(false)}
             onEnded={() => setIsPlaying(false)}
           />
+          {/* Saving Indicator */}
+          {isSaving && (
+            <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <div className="flex items-center space-x-2">
+                <Loader2 className="h-4 w-4 text-blue-600 animate-spin" />
+                <span className="text-sm text-blue-700 font-medium">Saving recording...</span>
+              </div>
+            </div>
+          )}
+
           <div className="mt-4 flex justify-end space-x-2">
             <button
-              onClick={onSave}
-              disabled={!finalTranscription}
+              onClick={handleSave}
+              disabled={!finalTranscription || isSaving}
               className="flex items-center space-x-2 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <Save className="h-4 w-4" />
-              <span>Save Transcription</span>
+              {isSaving ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>Saving...</span>
+                </>
+              ) : (
+                <>
+                  <Save className="h-4 w-4" />
+                  <span>Save Transcription</span>
+                </>
+              )}
             </button>
             <button
               onClick={onRerecord}
-              className="flex items-center space-x-2 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600"
+              disabled={isSaving}
+              className="flex items-center space-x-2 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <RotateCcw className="h-4 w-4" />
               <span>Rerecord</span>

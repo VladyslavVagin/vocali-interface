@@ -68,6 +68,7 @@ const Main = () => {
   const [playingAudio, setPlayingAudio] = useState<string | null>(null)
   const [audioElements, setAudioElements] = useState<{ [key: string]: HTMLAudioElement }>({})
   const [showRealTimeRecording, setShowRealTimeRecording] = useState(false)
+  const [savingRealTimeRecording, setSavingRealTimeRecording] = useState(false)
   const [deletingFiles, setDeletingFiles] = useState<{ [key: string]: boolean }>({})
   const [showSplash, setShowSplash] = useState(true)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -284,8 +285,15 @@ const Main = () => {
       // Delete the file
       await api.delete(`/audio/files?fileKey=${encodeURIComponent(fileKey)}`)
       
-      // Refresh the audio files list to get updated data
-      await fetchAudioFiles(currentPage)
+      // Check if we're on a page that might become empty after deletion
+      // If we're on page > 1 and this is the only item on the page, go to previous page
+      if (currentPage > 1 && audioFiles.length === 1) {
+        // Navigate to previous page after deletion
+        await fetchAudioFiles(currentPage - 1)
+      } else {
+        // Refresh the audio files list to get updated data
+        await fetchAudioFiles(currentPage)
+      }
       
       // Clean up audio element
       if (audioElements[fileKey]) {
@@ -340,6 +348,9 @@ const Main = () => {
         return
       }
 
+      // Set saving state to show loading indicator
+      setSavingRealTimeRecording(true)
+
       // Create a FormData object to send the audio file
       const formData = new FormData()
       formData.append('file', audioBlob, 'recording.wav')
@@ -382,6 +393,9 @@ const Main = () => {
         fontFamily: 'Inter, system-ui, sans-serif',
         fontSize: '14px',
       })
+    } finally {
+      // Clear saving state
+      setSavingRealTimeRecording(false)
     }
   }
 
@@ -416,11 +430,7 @@ const Main = () => {
     }
   }
 
-  const handlePageSizeChange = (newLimit: number) => {
-    setPagination(prev => ({ ...prev, limit: newLimit }))
-    setCurrentPage(1)
-    fetchAudioFiles(1)
-  }
+
 
   // Fetch audio files when component mounts
   useEffect(() => {
@@ -641,6 +651,7 @@ const Main = () => {
               <RealTimeRecording 
                 onTranscriptionComplete={handleRealTimeTranscriptionComplete}
                 onError={handleRealTimeError}
+                isSaving={savingRealTimeRecording}
               />
             </div>
           )}
@@ -778,8 +789,6 @@ const Main = () => {
                     pagination={pagination}
                     currentPage={currentPage}
                     onPageChange={handlePageChange}
-                    onPageSizeChange={handlePageSizeChange}
-                    showPageSizeSelector={true}
                     showItemCount={true}
                     itemLabel="files"
                   />

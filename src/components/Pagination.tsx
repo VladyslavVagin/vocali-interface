@@ -14,8 +14,6 @@ interface PaginationProps {
   pagination: PaginationInfo
   currentPage: number
   onPageChange: (page: number) => void
-  onPageSizeChange: (limit: number) => void
-  showPageSizeSelector?: boolean
   showItemCount?: boolean
   itemLabel?: string
 }
@@ -24,8 +22,6 @@ const Pagination: React.FC<PaginationProps> = ({
   pagination,
   currentPage,
   onPageChange,
-  onPageSizeChange,
-  showPageSizeSelector = true,
   showItemCount = true,
   itemLabel = 'files'
 }) => {
@@ -68,28 +64,11 @@ const Pagination: React.FC<PaginationProps> = ({
   return (
     <div className="flex items-center justify-between">
       <div className="flex items-center space-x-4">
-        {showPageSizeSelector && (
-          <div className="flex items-center space-x-2">
-            <span className="text-sm text-gray-600">Show:</span>
-            <select
-              value={pagination.limit}
-              onChange={(e) => onPageSizeChange(Number(e.target.value))}
-              className="border border-gray-300 rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value={5}>5</option>
-              <option value={10}>10</option>
-              <option value={20}>20</option>
-              <option value={50}>50</option>
-            </select>
-            <span className="text-sm text-gray-600">per page</span>
+        {showItemCount && (
+          <div className="text-sm text-gray-600">
+            Showing {((currentPage - 1) * pagination.limit) + 1} to {Math.min(currentPage * pagination.limit, pagination.totalItems)} of {pagination.totalItems} {itemLabel}
           </div>
         )}
-
-                 {showItemCount && (
-           <div className="text-sm text-gray-600">
-             Showing {((currentPage - 1) * pagination.limit) + 1} to {Math.min(currentPage * pagination.limit, pagination.totalItems)} of {pagination.totalItems} {itemLabel}
-           </div>
-         )}
       </div>
 
       <div className="flex items-center space-x-2">
