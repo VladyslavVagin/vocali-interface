@@ -2,59 +2,14 @@ import { useEffect, useRef, useState } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
 import { useNavigate } from 'react-router-dom'
 import { LogOut, User, Mail, Loader2, Upload, AlertCircle, Play, FileAudio, Download, FileText, Mic, Trash2 } from 'lucide-react'
+import { Notify, Confirm } from 'notiflix'
 import { logout, getProfile } from '../redux/slices/authSlice'
 import type { RootState, AppDispatch } from '../redux/store'
 import Logo from '../components/Logo'
 import RealTimeRecording from '../components/RealTimeRecording'
 import Pagination from '../components/Pagination'
 import api from '../services/api'
-import { Notify, Confirm } from 'notiflix'
-
-interface AudioFile {
-  userId: string
-  fileKey: string
-  fileName: string
-  fileSize: number
-  duration: number
-  format: string
-  uploadedAt: string
-  lastModified: string
-  status: string
-  metadata: {
-    originalName: string
-    duration: number
-    extension: string
-    transcription: {
-      language: string
-      text: string
-      status: string
-      completedAt?: string
-      wordCount?: number
-      method?: string
-      confidence?: number
-      characterCount?: number
-    }
-    fileSize: number
-    format: string
-    uploadedAt: string
-    mimeType: string
-  }
-  downloadUrl: string
-}
-
-interface PaginationInfo {
-  page: number
-  limit: number
-  totalItems: number
-  totalPages: number
-  hasNextPage: boolean
-  hasPreviousPage: boolean
-}
-
-interface AudioFilesResponse {
-  items: AudioFile[]
-  pagination: PaginationInfo
-}
+import type { AudioFile, PaginationInfo, AudioFilesResponse } from '../types/main_interfaces'
 
 const Main = () => {
   const dispatch = useDispatch<AppDispatch>()
@@ -496,8 +451,7 @@ const Main = () => {
             autoPlay
             muted
             loop
-            className="w-64 h-64 mx-auto"
-            style={{ maxWidth: '300px', maxHeight: '300px' }}
+            className="w-64 h-64 mx-auto max-w-[300px] max-h-[300px]"
           >
             <source src="/src/assets/logo-vocali-animated.mp4" type="video/mp4" />
             Your browser does not support the video tag.

@@ -20,7 +20,6 @@ const Auth = () => {
     }
   }, [location.hash])
 
-  // Show confirmation page if user needs to confirm email
   if (needsConfirmation) {
     return <Confirmation />
   }

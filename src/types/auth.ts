@@ -20,9 +20,7 @@ export interface SigninCredentials {
   password: string
 }
 
-export interface SignupData {
-  email: string
-  password: string
+export interface SignupData extends SigninCredentials {
   firstName: string
   lastName: string
 }
