@@ -1,8 +1,8 @@
 import { useState, useRef, useEffect } from 'react'
-import { Mic, MicOff, Square, Loader2, AlertCircle } from 'lucide-react'
+import { Mic, MicOff, Square, Loader2, AlertCircle, Play, Pause, Save, RotateCcw } from 'lucide-react'
 
 interface RealTimeRecordingProps {
-  onTranscriptionComplete: (text: string) => void
+  onTranscriptionComplete: (text: string, audioBlob?: Blob) => void
   onError: (error: string) => void
 }
 
@@ -13,9 +13,15 @@ const RealTimeRecording: React.FC<RealTimeRecordingProps> = ({
   const [isRecording, setIsRecording] = useState(false)
   const [isConnecting, setIsConnecting] = useState(false)
   const [transcription, setTranscription] = useState('')
+  const [finalTranscription, setFinalTranscription] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [audioLevel, setAudioLevel] = useState(0)
   const [connectionStatus, setConnectionStatus] = useState<string>('disconnected')
+  const [showPlayback, setShowPlayback] = useState(false)
+  const [isPlaying, setIsPlaying] = useState(false)
+  const [audioBlob, setAudioBlob] = useState<Blob | null>(null)
+  const [audioUrl, setAudioUrl] = useState<string | null>(null)
+  const [accumulatedTranscript, setAccumulatedTranscript] = useState('')
   
   const audioContextRef = useRef<AudioContext | null>(null)
   const analyserRef = useRef<AnalyserNode | null>(null)
@@ -26,6 +32,9 @@ const RealTimeRecording: React.FC<RealTimeRecordingProps> = ({
   const websocketRef = useRef<WebSocket | null>(null)
   const recognitionStartedRef = useRef(false)
   const audioChunkCountRef = useRef(0)
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const audioChunksRef = useRef<Blob[]>([])
+  const audioElementRef = useRef<HTMLAudioElement | null>(null)
 
   // Speechmatics configuration
   const SPEECHMATICS_API_KEY = import.meta.env.VITE_SPEECHMATICS_API_KEY
@@ -35,6 +44,10 @@ const RealTimeRecording: React.FC<RealTimeRecordingProps> = ({
       setIsConnecting(true)
       setError(null)
       setTranscription('')
+      setFinalTranscription('')
+      setShowPlayback(false)
+      setAudioBlob(null)
+      setAudioUrl(null)
       setConnectionStatus('connecting')
 
       // Get microphone access
@@ -48,6 +61,27 @@ const RealTimeRecording: React.FC<RealTimeRecordingProps> = ({
       })
 
       streamRef.current = stream
+
+      // Set up MediaRecorder for audio capture
+      mediaRecorderRef.current = new MediaRecorder(stream)
+      audioChunksRef.current = []
+      
+      mediaRecorderRef.current.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data)
+        }
+      }
+
+      mediaRecorderRef.current.onstop = () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/wav' })
+        const audioUrl = URL.createObjectURL(audioBlob)
+        setAudioBlob(audioBlob)
+        setAudioUrl(audioUrl)
+        setShowPlayback(true)
+      }
+
+      // Start MediaRecorder
+      mediaRecorderRef.current.start()
 
       // Set up audio context and processing
       audioContextRef.current = new AudioContext({ sampleRate: 16000 })
@@ -98,11 +132,18 @@ const RealTimeRecording: React.FC<RealTimeRecordingProps> = ({
       
       workletNodeRef.current.port.onmessage = (event) => {
         if (event.data.audioData && websocketRef.current && recognitionStartedRef.current) {
-          const audioData = new Float32Array(event.data.audioData);
-          // Convert Float32Array to binary data for WebSocket
-          const buffer = audioData.buffer;
-          websocketRef.current.send(buffer);
-          audioChunkCountRef.current++;
+          // Check WebSocket state before sending
+          if (websocketRef.current.readyState === WebSocket.OPEN) {
+            const audioData = new Float32Array(event.data.audioData);
+            // Convert Float32Array to binary data for WebSocket
+            const buffer = audioData.buffer;
+            try {
+              websocketRef.current.send(buffer);
+              audioChunkCountRef.current++;
+            } catch (error) {
+              console.warn('Failed to send audio data:', error);
+            }
+          }
         }
       };
 
@@ -124,19 +165,32 @@ const RealTimeRecording: React.FC<RealTimeRecordingProps> = ({
   }
 
   const stopRecording = () => {
-    // Send EndOfStream message
-    if (websocketRef.current && websocketRef.current.readyState === WebSocket.OPEN) {
-      websocketRef.current.send(JSON.stringify({
-        message: "EndOfStream",
-        last_seq_no: audioChunkCountRef.current
-      }));
+    // Stop MediaRecorder
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      mediaRecorderRef.current.stop()
     }
 
-    // Close WebSocket
-    if (websocketRef.current) {
-      websocketRef.current.close()
-      websocketRef.current = null
-    }
+    // Wait a moment for any final transcript segments before sending EndOfStream
+    setTimeout(() => {
+      // Send EndOfStream message
+      if (websocketRef.current && websocketRef.current.readyState === WebSocket.OPEN) {
+        websocketRef.current.send(JSON.stringify({
+          message: "EndOfStream",
+          last_seq_no: audioChunkCountRef.current
+        }));
+        
+        // Wait a moment for the message to be sent before closing
+        setTimeout(() => {
+          if (websocketRef.current) {
+            websocketRef.current.close(1000, 'Normal closure')
+            websocketRef.current = null
+          }
+        }, 100)
+      } else if (websocketRef.current) {
+        websocketRef.current.close(1000, 'Normal closure')
+        websocketRef.current = null
+      }
+    }, 3000) // Wait 3 seconds for final transcript segments
 
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(track => track.stop())
@@ -163,12 +217,127 @@ const RealTimeRecording: React.FC<RealTimeRecordingProps> = ({
     setConnectionStatus('disconnected')
     recognitionStartedRef.current = false
     audioChunkCountRef.current = 0
+    
+    // Call handleRecordingComplete after a delay to ensure we have the latest transcripts
+    setTimeout(() => {
+      handleRecordingComplete()
+    }, 1000)
+  }
+
+  const handlePlayPause = () => {
+    if (!audioElementRef.current) return
+
+    if (isPlaying) {
+      audioElementRef.current.pause()
+      setIsPlaying(false)
+    } else {
+      audioElementRef.current.play()
+      setIsPlaying(true)
+    }
+  }
+
+  const handleSave = () => {
+    if (finalTranscription) {
+      onTranscriptionComplete(finalTranscription, audioBlob || undefined)
+      // Reset state
+      setShowPlayback(false)
+      setFinalTranscription('')
+      setTranscription('')
+      setAudioBlob(null)
+      setAudioUrl(null)
+    }
+  }
+
+  const handleRerecord = () => {
+    setShowPlayback(false)
+    setFinalTranscription('')
+    setTranscription('')
+    setAudioBlob(null)
+    setAudioUrl(null)
+    // Clean up audio URL
+    if (audioUrl) {
+      URL.revokeObjectURL(audioUrl)
+      setAudioUrl(null)
+    }
+  }
+
+  const handleRecordingComplete = () => {
+    // This is called when the recording is fully complete
+    console.log('Recording complete. Available transcripts:')
+    console.log('- Accumulated:', accumulatedTranscript)
+    console.log('- Partial:', transcription)
+    
+    // Choose the most complete transcript
+    let finalText = ''
+    
+    // If we have both accumulated and partial, try to combine them intelligently
+    if (accumulatedTranscript && transcription) {
+      const accumulated = accumulatedTranscript.trim()
+      const partial = transcription.trim()
+      
+      // If partial seems to continue from where accumulated left off, combine them
+      if (accumulated && partial && !accumulated.endsWith('.') && !accumulated.endsWith('!') && !accumulated.endsWith('?')) {
+        // Accumulated doesn't end with punctuation, partial might continue it
+        const combined = accumulated + ' ' + partial
+        finalText = cleanTranscriptText(combined)
+        console.log('Combining accumulated and partial:', finalText)
+      } else {
+        // Choose the longer/more complete one
+        const accumulatedCleaned = cleanTranscriptText(accumulated)
+        if (partial.length > accumulatedCleaned.length) {
+          finalText = partial
+          console.log('Using partial transcript (longer):', finalText)
+        } else {
+          finalText = accumulatedCleaned
+          console.log('Using accumulated transcript (cleaned):', finalText)
+        }
+      }
+    } else if (accumulatedTranscript) {
+      finalText = cleanTranscriptText(accumulatedTranscript)
+      console.log('Using accumulated transcript:', finalText)
+    } else if (transcription) {
+      finalText = transcription
+      console.log('Using partial transcript:', finalText)
+    }
+    
+    if (finalText) {
+      setFinalTranscription(finalText)
+    }
+  }
+
+  const cleanTranscriptText = (text: string) => {
+    let cleanedText = text.trim();
+
+    // Remove trailing incomplete words (words less than 3 characters at the end)
+    const words = cleanedText.split(' ');
+    if (words.length > 0 && words[words.length - 1].length < 3) {
+      words.pop();
+      cleanedText = words.join(' ');
+    }
+
+    // Remove *exact* duplicate sentences only
+    const sentences = cleanedText.split(/[.!?]+/).map(s => s.trim()).filter(s => s.length > 0);
+    const seen = new Set<string>();
+    const uniqueSentences = sentences.filter(sentence => {
+      if (seen.has(sentence)) return false;
+      seen.add(sentence);
+      return true;
+    });
+
+    // Join unique sentences with proper punctuation
+    const finalText = uniqueSentences.join('. ') + (uniqueSentences.length > 0 ? '.' : '');
+
+    return finalText;
   }
 
   useEffect(() => {
     return () => {
       if (isRecording) {
         stopRecording()
+      }
+      // Clean up audio URL
+      if (audioUrl) {
+        URL.revokeObjectURL(audioUrl)
       }
     }
   }, [])
@@ -191,18 +360,31 @@ const RealTimeRecording: React.FC<RealTimeRecordingProps> = ({
       isRecording={isRecording}
       isConnecting={isConnecting}
       transcription={transcription}
+      finalTranscription={finalTranscription}
       error={error}
       audioLevel={audioLevel}
       connectionStatus={connectionStatus}
+      showPlayback={showPlayback}
+      isPlaying={isPlaying}
+      audioUrl={audioUrl}
       onStartRecording={startRecording}
       onStopRecording={stopRecording}
       onTranscriptionComplete={onTranscriptionComplete}
       onError={onError}
+      onPlayPause={handlePlayPause}
+      onSave={handleSave}
+      onRerecord={handleRerecord}
+      setFinalTranscription={setFinalTranscription}
+      setIsPlaying={setIsPlaying}
       apiKey={SPEECHMATICS_API_KEY}
       websocketRef={websocketRef}
       recognitionStartedRef={recognitionStartedRef}
+      audioChunkCountRef={audioChunkCountRef}
       setTranscription={setTranscription}
       setConnectionStatus={setConnectionStatus}
+      audioElementRef={audioElementRef}
+      accumulatedTranscript={accumulatedTranscript}
+      setAccumulatedTranscript={setAccumulatedTranscript}
     />
   )
 }
@@ -211,37 +393,88 @@ interface RecordingInterfaceProps {
   isRecording: boolean
   isConnecting: boolean
   transcription: string
+  finalTranscription: string
   error: string | null
   audioLevel: number
   connectionStatus: string
+  showPlayback: boolean
+  isPlaying: boolean
+  audioUrl: string | null
   onStartRecording: () => void
   onStopRecording: () => void
   onTranscriptionComplete: (text: string) => void
   onError: (error: string) => void
+  onPlayPause: () => void
+  onSave: () => void
+  onRerecord: () => void
+  setFinalTranscription: (text: string) => void
+  setIsPlaying: (playing: boolean) => void
+  accumulatedTranscript: string
+  setAccumulatedTranscript: (text: string) => void
   apiKey: string
   websocketRef: React.MutableRefObject<WebSocket | null>
   recognitionStartedRef: React.MutableRefObject<boolean>
+  audioChunkCountRef: React.MutableRefObject<number>
   setTranscription: (text: string) => void
   setConnectionStatus: (status: string) => void
+  audioElementRef: React.MutableRefObject<HTMLAudioElement | null>
 }
 
 const RecordingInterface: React.FC<RecordingInterfaceProps> = ({
   isRecording,
   isConnecting,
   transcription,
+  finalTranscription,
   error,
   audioLevel,
   connectionStatus,
+  showPlayback,
+  isPlaying,
+  audioUrl,
   onStartRecording,
   onStopRecording,
   onTranscriptionComplete,
   onError,
+  onPlayPause,
+  onSave,
+  onRerecord,
+  setFinalTranscription,
+  setIsPlaying,
   apiKey,
   websocketRef,
   recognitionStartedRef,
+  audioChunkCountRef,
   setTranscription,
-  setConnectionStatus
+  setConnectionStatus,
+  audioElementRef,
+  accumulatedTranscript,
+  setAccumulatedTranscript
 }) => {
+
+  const [localIsRecording, setLocalIsRecording] = useState(isRecording)
+  const [localAudioLevel, setLocalAudioLevel] = useState(audioLevel)
+  const [localAccumulatedTranscript, setLocalAccumulatedTranscript] = useState(accumulatedTranscript)
+
+  // Synchronize local state with props
+  useEffect(() => {
+    setLocalIsRecording(isRecording)
+  }, [isRecording])
+
+  useEffect(() => {
+    setLocalAudioLevel(audioLevel)
+  }, [audioLevel])
+
+  // Synchronize accumulated transcript with parent
+  useEffect(() => {
+    setLocalAccumulatedTranscript(accumulatedTranscript)
+  }, [accumulatedTranscript])
+
+  // Reset accumulated transcript when starting new recording
+  useEffect(() => {
+    if (isRecording && !localIsRecording) {
+      setLocalAccumulatedTranscript('')
+    }
+  }, [isRecording, localIsRecording])
 
   const handleStartRecording = async () => {
     try {
@@ -259,7 +492,7 @@ const RecordingInterface: React.FC<RecordingInterfaceProps> = ({
         console.log('WebSocket connected')
         setConnectionStatus('connected')
         
-        // Send StartRecognition message
+        // Send StartRecognition message with proper configuration
         const startMessage = {
           message: "StartRecognition",
           audio_format: {
@@ -270,8 +503,10 @@ const RecordingInterface: React.FC<RecordingInterfaceProps> = ({
           transcription_config: {
             language: "en",
             enable_partials: true,
-            max_delay: 2,
-            enable_entities: true
+            max_delay: 6.0,
+            max_delay_mode: "flexible",
+            enable_entities: true,
+            operating_point: "enhanced"
           }
         }
         
@@ -290,20 +525,80 @@ const RecordingInterface: React.FC<RecordingInterfaceProps> = ({
             // Start audio recording after recognition is started
             onStartRecording()
           } else if (data.message === 'AddPartialTranscript') {
-            console.log('Partial transcript:', data.metadata.transcript)
-            setTranscription(data.metadata.transcript)
+            if (data.metadata && data.metadata.transcript) {
+              console.log('Partial transcript:', data.metadata.transcript)
+              setTranscription(data.metadata.transcript)
+              // Store the latest partial transcript as backup, but don't overwrite if it's shorter
+              setLocalAccumulatedTranscript(prevText => {
+                const newPartial = data.metadata.transcript
+                // Only update if the new partial is longer or we don't have accumulated text
+                if (!prevText || newPartial.length > prevText.length) {
+                  console.log('Updating accumulated transcript with longer partial:', newPartial)
+                  return newPartial
+                }
+                return prevText
+              })
+            }
           } else if (data.message === 'AddTranscript') {
-            console.log('Final transcript:', data.metadata.transcript)
-            setTranscription(data.metadata.transcript)
-            onTranscriptionComplete(data.metadata.transcript)
+            if (data.metadata && data.metadata.transcript) {
+              console.log('Final transcript segment:', data.metadata.transcript)
+              // Use final transcript segments as the primary source
+              setLocalAccumulatedTranscript(prevText => {
+                const currentText = prevText || ''
+                const newSegment = data.metadata.transcript
+                
+                // Don't add very short segments that might be incomplete
+                if (newSegment.trim().length < 3 && !newSegment.includes('.')) {
+                  console.log('Skipping short incomplete segment:', newSegment)
+                  return currentText
+                }
+                
+                // Clean up the text by removing duplicates and repetitions
+                const cleanText = currentText + (currentText && !currentText.endsWith(' ') ? ' ' : '') + newSegment
+                console.log('Clean final transcript:', cleanText)
+                // Update the parent component's accumulated transcript
+                setAccumulatedTranscript(cleanText)
+                // Update the parent component's finalTranscription
+                setFinalTranscription(cleanText)
+                return cleanText
+              })
+            }
+          } else if (data.message === 'EndOfUtterance') {
+            console.log('End of utterance detected')
+            // Wait a bit more for any final transcript segments
+            setTimeout(() => {
+              console.log('Final transcript after utterance end:', localAccumulatedTranscript)
+            }, 1000)
           } else if (data.message === 'AudioAdded') {
             console.log('Audio chunk acknowledged:', data.seq_no)
           } else if (data.message === 'Error') {
             console.error('Speechmatics error:', data)
-            onError(data.reason || 'Transcription error')
+            if (data.type === 'quota_exceeded') {
+              onError('Speechmatics quota exceeded. Please try again later.')
+            } else {
+              onError(data.reason || 'Transcription error')
+            }
+            // Stop recording immediately on error
+            setLocalIsRecording(false)
+            setLocalAudioLevel(0)
+            setConnectionStatus('error')
+            recognitionStartedRef.current = false
+            audioChunkCountRef.current = 0
           } else if (data.message === 'EndOfTranscript') {
             console.log('Transcription ended')
-            onStopRecording()
+            // Handle the complete recording
+            handleRecordingComplete()
+            // Don't call onStopRecording here as it might cause a double close
+            // Just update the UI state
+            setLocalIsRecording(false)
+            setLocalAudioLevel(0)
+            setConnectionStatus('disconnected')
+            recognitionStartedRef.current = false
+            audioChunkCountRef.current = 0
+          } else if (data.message === 'Info') {
+            console.log('Info message:', data.reason)
+          } else if (data.message === 'Warning') {
+            console.warn('Warning message:', data.reason)
           }
         } catch (error) {
           console.log('Non-JSON message received')
@@ -367,6 +662,75 @@ const RecordingInterface: React.FC<RecordingInterfaceProps> = ({
     }
   }
 
+  const handleRecordingComplete = () => {
+    // This is called when the recording is fully complete
+    console.log('Recording complete. Available transcripts:')
+    console.log('- Accumulated:', localAccumulatedTranscript)
+    console.log('- Partial:', transcription)
+    
+    // Choose the most complete transcript
+    let finalText = ''
+    
+    // If we have both accumulated and partial, try to combine them intelligently
+    if (localAccumulatedTranscript && transcription) {
+      const accumulated = localAccumulatedTranscript.trim()
+      const partial = transcription.trim()
+      
+      // If partial seems to continue from where accumulated left off, combine them
+      if (accumulated && partial && !accumulated.endsWith('.') && !accumulated.endsWith('!') && !accumulated.endsWith('?')) {
+        // Accumulated doesn't end with punctuation, partial might continue it
+        const combined = accumulated + ' ' + partial
+        finalText = cleanTranscriptText(combined)
+        console.log('Combining accumulated and partial:', finalText)
+      } else {
+        // Choose the longer/more complete one
+        const accumulatedCleaned = cleanTranscriptText(accumulated)
+        if (partial.length > accumulatedCleaned.length) {
+          finalText = partial
+          console.log('Using partial transcript (longer):', finalText)
+        } else {
+          finalText = accumulatedCleaned
+          console.log('Using accumulated transcript (cleaned):', finalText)
+        }
+      }
+    } else if (localAccumulatedTranscript) {
+      finalText = cleanTranscriptText(localAccumulatedTranscript)
+      console.log('Using accumulated transcript:', finalText)
+    } else if (transcription) {
+      finalText = transcription
+      console.log('Using partial transcript:', finalText)
+    }
+    
+    if (finalText) {
+      setFinalTranscription(finalText)
+    }
+  }
+
+  const cleanTranscriptText = (text: string) => {
+    let cleanedText = text.trim();
+
+    // Remove trailing incomplete words (words less than 3 characters at the end)
+    const words = cleanedText.split(' ');
+    if (words.length > 0 && words[words.length - 1].length < 3) {
+      words.pop();
+      cleanedText = words.join(' ');
+    }
+
+    // Remove *exact* duplicate sentences only
+    const sentences = cleanedText.split(/[.!?]+/).map(s => s.trim()).filter(s => s.length > 0);
+    const seen = new Set<string>();
+    const uniqueSentences = sentences.filter(sentence => {
+      if (seen.has(sentence)) return false;
+      seen.add(sentence);
+      return true;
+    });
+
+    // Join unique sentences with proper punctuation
+    const finalText = uniqueSentences.join('. ') + (uniqueSentences.length > 0 ? '.' : '');
+
+    return finalText;
+  }
+
   return (
     <div className="bg-white rounded-2xl shadow-lg p-6">
       <div className="text-center mb-6">
@@ -397,7 +761,7 @@ const RecordingInterface: React.FC<RecordingInterfaceProps> = ({
       </div>
 
       {/* Audio Level Meter */}
-      {isRecording && (
+      {localIsRecording && (
         <div className="mb-6">
           <div className="flex items-center justify-center space-x-2 mb-2">
             <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
@@ -406,7 +770,7 @@ const RecordingInterface: React.FC<RecordingInterfaceProps> = ({
           <div className="w-full bg-gray-200 rounded-full h-2">
             <div 
               className="bg-gradient-to-r from-green-400 to-blue-500 h-2 rounded-full transition-all duration-100"
-              style={{ width: `${audioLevel * 100}%` }}
+              style={{ width: `${localAudioLevel * 100}%` }}
             ></div>
           </div>
         </div>
@@ -415,10 +779,10 @@ const RecordingInterface: React.FC<RecordingInterfaceProps> = ({
       {/* Recording Button */}
       <div className="flex justify-center mb-6">
         <button
-          onClick={isRecording ? handleStopRecording : handleStartRecording}
+          onClick={localIsRecording ? handleStopRecording : handleStartRecording}
           disabled={isConnecting}
           className={`flex items-center space-x-3 px-8 py-4 rounded-full font-semibold text-white transition-all duration-200 ${
-            isRecording 
+            localIsRecording 
               ? 'bg-red-500 hover:bg-red-600 shadow-lg' 
               : 'bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 shadow-lg hover:shadow-xl'
           } disabled:opacity-50 disabled:cursor-not-allowed`}
@@ -428,7 +792,7 @@ const RecordingInterface: React.FC<RecordingInterfaceProps> = ({
               <Loader2 className="h-6 w-6 animate-spin" />
               <span>Connecting...</span>
             </>
-          ) : isRecording ? (
+          ) : localIsRecording ? (
             <>
               <Square className="h-6 w-6" />
               <span>Stop Recording</span>
@@ -453,7 +817,7 @@ const RecordingInterface: React.FC<RecordingInterfaceProps> = ({
       )}
 
       {/* Live Transcription */}
-      {transcription && (
+      {transcription && !showPlayback && (
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
           <div className="flex items-center space-x-2 mb-2">
             <Mic className="h-4 w-4 text-blue-600" />
@@ -465,16 +829,60 @@ const RecordingInterface: React.FC<RecordingInterfaceProps> = ({
         </div>
       )}
 
-      {/* Debug Info */}
-      <div className="mt-4 p-3 bg-gray-50 border border-gray-200 rounded-lg">
-        <div className="text-xs text-gray-600">
-          <div>Connection Status: {connectionStatus}</div>
-          <div>Is Recording: {isRecording ? 'Yes' : 'No'}</div>
-          <div>Recognition Started: {recognitionStartedRef.current ? 'Yes' : 'No'}</div>
-          <div>Audio Level: {Math.round(audioLevel * 100)}%</div>
-          <div>Transcription Length: {transcription.length} characters</div>
+      {/* Final Transcription */}
+      {finalTranscription && showPlayback && (
+        <div className="bg-green-50 border border-green-200 rounded-lg p-4 mt-4">
+          <div className="flex items-center space-x-2 mb-2">
+            <Mic className="h-4 w-4 text-green-600" />
+            <span className="text-sm font-medium text-green-800">Final Transcription</span>
+          </div>
+          <p className="text-sm text-gray-700 leading-relaxed">
+            "{finalTranscription}"
+          </p>
         </div>
-      </div>
+      )}
+
+      {/* Audio Playback */}
+      {showPlayback && audioUrl && (
+        <div className="mt-6 bg-gray-100 rounded-lg p-4">
+          <div className="flex items-center justify-between mb-2">
+            <h4 className="text-lg font-semibold text-gray-800">Recorded Audio</h4>
+            <button
+              onClick={onPlayPause}
+              className="p-2 rounded-full hover:bg-gray-200"
+              title={isPlaying ? 'Pause' : 'Play'}
+            >
+              {isPlaying ? <Pause className="h-6 w-6" /> : <Play className="h-6 w-6" />}
+            </button>
+          </div>
+          <audio
+            ref={audioElementRef}
+            src={audioUrl}
+            controls
+            className="w-full"
+            onPlay={() => setIsPlaying(true)}
+            onPause={() => setIsPlaying(false)}
+            onEnded={() => setIsPlaying(false)}
+          />
+          <div className="mt-4 flex justify-end space-x-2">
+            <button
+              onClick={onSave}
+              disabled={!finalTranscription}
+              className="flex items-center space-x-2 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Save className="h-4 w-4" />
+              <span>Save Transcription</span>
+            </button>
+            <button
+              onClick={onRerecord}
+              className="flex items-center space-x-2 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600"
+            >
+              <RotateCcw className="h-4 w-4" />
+              <span>Rerecord</span>
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

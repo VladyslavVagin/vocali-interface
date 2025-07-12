@@ -187,10 +187,42 @@ const Main = () => {
     document.body.removeChild(a)
   }
 
-  const handleRealTimeTranscriptionComplete = (transcriptionText: string) => {
-    // Here you could save the transcription to your backend
-    console.log('Real-time transcription completed:', transcriptionText)
-    // You could also show a success message or save it to the audio files list
+  const handleRealTimeTranscriptionComplete = async (transcriptionText: string, audioBlob?: Blob) => {
+    try {
+      console.log('Real-time transcription completed:', transcriptionText)
+      
+      if (!audioBlob) {
+        console.error('No audio blob available for saving')
+        return
+      }
+
+      // Create a FormData object to send the audio file
+      const formData = new FormData()
+      formData.append('file', audioBlob, 'recording.wav')
+      
+      // Add transcription and recording type for real-time recordings
+      formData.append('transcription', transcriptionText)
+      formData.append('recordingType', 'real-time')
+
+      // Upload to your API
+      const response = await api.post('/audio/upload', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      })
+
+      console.log('Real-time recording saved successfully:', response.data)
+      
+      // Refresh the audio files list
+      fetchAudioFiles()
+      
+      // Show success message (you could add a toast notification here)
+      alert('Recording saved successfully!')
+      
+    } catch (error: any) {
+      console.error('Failed to save real-time recording:', error)
+      alert('Failed to save recording: ' + (error.response?.data?.message || error.message))
+    }
   }
 
   const handleRealTimeError = (error: string) => {
