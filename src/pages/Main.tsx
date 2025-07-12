@@ -6,6 +6,7 @@ import { logout, getProfile } from '../redux/slices/authSlice'
 import type { RootState, AppDispatch } from '../redux/store'
 import Logo from '../components/Logo'
 import RealTimeRecording from '../components/RealTimeRecording'
+import Pagination from '../components/Pagination'
 import api from '../services/api'
 import { Notify, Confirm } from 'notiflix'
 
@@ -41,6 +42,20 @@ interface AudioFile {
   downloadUrl: string
 }
 
+interface PaginationInfo {
+  page: number
+  limit: number
+  totalItems: number
+  totalPages: number
+  hasNextPage: boolean
+  hasPreviousPage: boolean
+}
+
+interface AudioFilesResponse {
+  items: AudioFile[]
+  pagination: PaginationInfo
+}
+
 const Main = () => {
   const dispatch = useDispatch<AppDispatch>()
   const navigate = useNavigate()
@@ -56,6 +71,17 @@ const Main = () => {
   const [deletingFiles, setDeletingFiles] = useState<{ [key: string]: boolean }>({})
   const [showSplash, setShowSplash] = useState(true)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pagination, setPagination] = useState<PaginationInfo>({
+    page: 1,
+    limit: 10,
+    totalItems: 0,
+    totalPages: 0,
+    hasNextPage: false,
+    hasPreviousPage: false
+  })
 
   useEffect(() => {
     // Only fetch profile if we have a valid token but no user data and haven't fetched yet
@@ -125,7 +151,7 @@ const Main = () => {
       const uploadResult = response.data
       
       // Refresh the audio files list after successful upload
-      await fetchAudioFiles()
+      await fetchAudioFiles(1)
       
       // Show success notification
       Notify.success('Audio file uploaded successfully!', {
@@ -258,8 +284,8 @@ const Main = () => {
       // Delete the file
       await api.delete(`/audio/files?fileKey=${encodeURIComponent(fileKey)}`)
       
-      // Remove from local state
-      setAudioFiles(prev => prev.filter(file => file.fileKey !== fileKey))
+      // Refresh the audio files list to get updated data
+      await fetchAudioFiles(currentPage)
       
       // Clean up audio element
       if (audioElements[fileKey]) {
@@ -332,7 +358,7 @@ const Main = () => {
       console.log('Real-time recording saved successfully:', response.data)
       
       // Refresh the audio files list
-      fetchAudioFiles()
+      await fetchAudioFiles(1)
       
       // Show success notification
       Notify.success('Recording saved successfully!', {
@@ -364,16 +390,36 @@ const Main = () => {
     // You could show a toast notification here
   }
 
-  const fetchAudioFiles = async () => {
+  const fetchAudioFiles = async (page: number = currentPage) => {
     setLoadingFiles(true)
     try {
-      const response = await api.get('/audio/files')
-      setAudioFiles(response.data)
+      const response = await api.get('/audio/files', {
+        params: {
+          page: page,
+          limit: pagination.limit,
+        },
+      })
+      const data: AudioFilesResponse = response.data
+      setAudioFiles(data.items)
+      setPagination(data.pagination)
+      setCurrentPage(page)
     } catch (error: any) {
       console.error('Failed to fetch audio files:', error)
     } finally {
       setLoadingFiles(false)
     }
+  }
+
+  const handlePageChange = (newPage: number) => {
+    if (newPage >= 1 && newPage <= pagination.totalPages) {
+      fetchAudioFiles(newPage)
+    }
+  }
+
+  const handlePageSizeChange = (newLimit: number) => {
+    setPagination(prev => ({ ...prev, limit: newLimit }))
+    setCurrentPage(1)
+    fetchAudioFiles(1)
   }
 
   // Fetch audio files when component mounts
@@ -621,109 +667,124 @@ const Main = () => {
                 <p className="text-gray-500">Upload your first audio file to get started</p>
               </div>
             ) : (
-              <div className="space-y-4">
-                {audioFiles.map((file) => (
-                  <div key={file.fileKey} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-4">
-                        <div className="flex items-center justify-center w-12 h-12 bg-blue-100 rounded-lg">
-                          <FileAudio className="h-6 w-6 text-blue-600" />
+              <>
+                <div className="space-y-4">
+                  {audioFiles.map((file) => (
+                    <div key={file.fileKey} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-4">
+                          <div className="flex items-center justify-center w-12 h-12 bg-blue-100 rounded-lg">
+                            <FileAudio className="h-6 w-6 text-blue-600" />
+                          </div>
+                          <div className="flex-1">
+                            <h3 className="font-semibold text-gray-800">{file.metadata.originalName}</h3>
+                            <div className="flex items-center space-x-4 text-sm text-gray-500 mt-1">
+                              <span>{file.metadata.format}</span>
+                              <span>•</span>
+                              <span>{Math.round(file.fileSize / 1024)} KB</span>
+                              <span>•</span>
+                              <span>{file.duration}s</span>
+                              {file.metadata.transcription?.status && (
+                                <>
+                                  <span>•</span>
+                                  <span className={`px-2 py-1 rounded-full text-xs ${
+                                    file.metadata.transcription.status === 'completed' 
+                                      ? 'bg-green-100 text-green-700'
+                                      : file.metadata.transcription.status === 'processing'
+                                      ? 'bg-yellow-100 text-yellow-700'
+                                      : file.metadata.transcription.status === 'failed'
+                                      ? 'bg-red-100 text-red-700'
+                                      : 'bg-gray-100 text-gray-700'
+                                  }`}>
+                                    {file.metadata.transcription.status}
+                                  </span>
+                                </>
+                              )}
+                            </div>
+                            {file.metadata.transcription?.text && file.metadata.transcription.text.trim() !== '' && (
+                              <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                                <div className="flex items-center justify-between mb-2">
+                                  <div className="flex items-center space-x-2">
+                                    <FileText className="h-4 w-4 text-blue-600" />
+                                    <span className="text-sm font-medium text-blue-800">Transcription</span>
+                                    {file.metadata.transcription?.status !== 'completed' && (
+                                      <span className="text-xs text-orange-600 bg-orange-100 px-2 py-1 rounded-full">
+                                        {file.metadata.transcription?.status}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <button
+                                    onClick={() => handleDownloadText(file.metadata.originalName, file.metadata.transcription.text)}
+                                    className="p-1 text-blue-600 hover:text-blue-700 hover:bg-blue-100 rounded transition-colors"
+                                    title="Download transcription"
+                                  >
+                                    <Download className="h-4 w-4" />
+                                  </button>
+                                </div>
+                                <p className="text-sm text-gray-700 leading-relaxed">
+                                  "{file.metadata.transcription.text}"
+                                </p>
+                              </div>
+                            )}
+                          </div>
                         </div>
-                                                 <div className="flex-1">
-                           <h3 className="font-semibold text-gray-800">{file.metadata.originalName}</h3>
-                           <div className="flex items-center space-x-4 text-sm text-gray-500 mt-1">
-                             <span>{file.metadata.format}</span>
-                             <span>•</span>
-                             <span>{Math.round(file.fileSize / 1024)} KB</span>
-                             <span>•</span>
-                             <span>{file.duration}s</span>
-                             {file.metadata.transcription?.status && (
-                               <>
-                                 <span>•</span>
-                                 <span className={`px-2 py-1 rounded-full text-xs ${
-                                   file.metadata.transcription.status === 'completed' 
-                                     ? 'bg-green-100 text-green-700'
-                                     : file.metadata.transcription.status === 'processing'
-                                     ? 'bg-yellow-100 text-yellow-700'
-                                     : file.metadata.transcription.status === 'failed'
-                                     ? 'bg-red-100 text-red-700'
-                                     : 'bg-gray-100 text-gray-700'
-                                 }`}>
-                                   {file.metadata.transcription.status}
-                                 </span>
-                               </>
-                             )}
-                           </div>
-                           {file.metadata.transcription?.text && file.metadata.transcription.text.trim() !== '' && (
-                             <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                               <div className="flex items-center justify-between mb-2">
-                                 <div className="flex items-center space-x-2">
-                                   <FileText className="h-4 w-4 text-blue-600" />
-                                   <span className="text-sm font-medium text-blue-800">Transcription</span>
-                                   {file.metadata.transcription?.status !== 'completed' && (
-                                                                            <span className="text-xs text-orange-600 bg-orange-100 px-2 py-1 rounded-full">
-                                         {file.metadata.transcription?.status}
-                                       </span>
-                                   )}
-                                 </div>
-                                 <button
-                                   onClick={() => handleDownloadText(file.metadata.originalName, file.metadata.transcription.text)}
-                                   className="p-1 text-blue-600 hover:text-blue-700 hover:bg-blue-100 rounded transition-colors"
-                                   title="Download transcription"
-                                 >
-                                   <Download className="h-4 w-4" />
-                                 </button>
-                               </div>
-                               <p className="text-sm text-gray-700 leading-relaxed">
-                                 "{file.metadata.transcription.text}"
-                               </p>
-                             </div>
-                           )}
-                         </div>
-                       </div>
-                       <div className="flex items-center space-x-2">
-                         <button
-                           onClick={() => handlePlayPause(file.fileKey, file.downloadUrl)}
-                           className={`p-2 transition-all duration-200 rounded-lg ${
-                             playingAudio === file.fileKey 
-                               ? 'bg-red-500 hover:bg-red-600 text-white shadow-lg' 
-                               : 'text-gray-600 hover:text-green-600 hover:bg-green-50'
-                           }`}
-                           title={playingAudio === file.fileKey ? 'Pause' : 'Play'}
-                         >
-                           {playingAudio === file.fileKey ? (
-                             <div className="h-5 w-5 flex items-center justify-center">
-                               <div className="flex space-x-1">
-                                 <div className="w-1 h-4 bg-white rounded-sm"></div>
-                                 <div className="w-1 h-4 bg-white rounded-sm"></div>
-                               </div>
-                             </div>
-                           ) : (
-                             <Play className="h-5 w-5" />
-                           )}
-                         </button>
-                         
-                         <button
-                           onClick={() => handleDeleteAudio(file.fileKey, file.metadata.originalName)}
-                           disabled={deletingFiles[file.fileKey]}
-                           className={`p-2 transition-all duration-200 rounded-lg ${
-                             deletingFiles[file.fileKey]
-                               ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                               : 'text-gray-600 hover:text-red-600 hover:bg-red-50'
-                           }`}
-                           title="Delete audio file"
-                         >
-                           {deletingFiles[file.fileKey] ? (
-                             <Loader2 className="h-5 w-5 animate-spin" />
-                           ) : (
-                             <Trash2 className="h-5 w-5" />
-                           )}
-                         </button>
-                       </div>
+                        <div className="flex items-center space-x-2">
+                          <button
+                            onClick={() => handlePlayPause(file.fileKey, file.downloadUrl)}
+                            className={`p-2 transition-all duration-200 rounded-lg ${
+                              playingAudio === file.fileKey 
+                                ? 'bg-red-500 hover:bg-red-600 text-white shadow-lg' 
+                                : 'text-gray-600 hover:text-green-600 hover:bg-green-50'
+                            }`}
+                            title={playingAudio === file.fileKey ? 'Pause' : 'Play'}
+                          >
+                            {playingAudio === file.fileKey ? (
+                              <div className="h-5 w-5 flex items-center justify-center">
+                                <div className="flex space-x-1">
+                                  <div className="w-1 h-4 bg-white rounded-sm"></div>
+                                  <div className="w-1 h-4 bg-white rounded-sm"></div>
+                                </div>
+                              </div>
+                            ) : (
+                              <Play className="h-5 w-5" />
+                            )}
+                          </button>
+                          
+                          <button
+                            onClick={() => handleDeleteAudio(file.fileKey, file.metadata.originalName)}
+                            disabled={deletingFiles[file.fileKey]}
+                            className={`p-2 transition-all duration-200 rounded-lg ${
+                              deletingFiles[file.fileKey]
+                                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                : 'text-gray-600 hover:text-red-600 hover:bg-red-50'
+                            }`}
+                            title="Delete audio file"
+                          >
+                            {deletingFiles[file.fileKey] ? (
+                              <Loader2 className="h-5 w-5 animate-spin" />
+                            ) : (
+                              <Trash2 className="h-5 w-5" />
+                            )}
+                          </button>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+
+                {/* Pagination Controls */}
+                <div className="mt-6">
+                  <Pagination
+                    pagination={pagination}
+                    currentPage={currentPage}
+                    onPageChange={handlePageChange}
+                    onPageSizeChange={handlePageSizeChange}
+                    showPageSizeSelector={true}
+                    showItemCount={true}
+                    itemLabel="files"
+                  />
+                </div>
+              </>
             )}
           </div>
         </div>
