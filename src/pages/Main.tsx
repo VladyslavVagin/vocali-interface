@@ -297,6 +297,12 @@ const Main = () => {
               <h1 className="text-2xl font-bold text-gray-800">Vocali</h1>
             </div>
             <div className="flex items-center space-x-6">
+              {/* Voice Status */}
+              <div className="flex items-center space-x-2 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                <span className="text-sm text-green-700 font-medium">Voice recognition ready</span>
+              </div>
+              
               {user && (
                 <div className="flex items-center space-x-3">
                   <div className="flex items-center space-x-2 text-gray-600">
@@ -325,16 +331,20 @@ const Main = () => {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="space-y-8">
           {/* Audio Recording Options */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-3xl mx-auto">
             {/* Upload Audio Card */}
-            <div className="bg-white rounded-2xl shadow-lg p-6 hover:shadow-xl transition-shadow">
-              <div className="flex items-center justify-center w-16 h-16 bg-blue-100 rounded-full mb-4">
-                <Upload className="h-8 w-8 text-blue-600" />
+            <div className="bg-white rounded-xl shadow-lg p-4 hover:shadow-xl transition-shadow">
+              <div className="flex items-start space-x-3">
+                <div className="flex items-center justify-center w-12 h-12 bg-blue-100 rounded-full flex-shrink-0">
+                  <Upload className="h-6 w-6 text-blue-600" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-lg font-semibold text-gray-800 mb-2">Upload Audio</h3>
+                  <p className="text-gray-600 mb-3 text-sm">
+                    Upload your audio file for voice processing and analysis. Maximum file size: 20 MB.
+                  </p>
+                </div>
               </div>
-              <h3 className="text-xl font-semibold text-gray-800 mb-2">Upload Audio</h3>
-              <p className="text-gray-600 mb-4">
-                Upload your audio file for voice processing and analysis.
-              </p>
               
               {/* Hidden file input */}
               <input
@@ -350,16 +360,16 @@ const Main = () => {
                 <button 
                   onClick={handleUploadClick}
                   disabled={uploading}
-                  className="w-full bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-semibold py-3 px-6 rounded-lg hover:from-blue-600 hover:to-indigo-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+                  className="w-full bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-semibold py-2 px-4 rounded-lg hover:from-blue-600 hover:to-indigo-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2 text-sm"
                 >
                   {uploading ? (
                     <>
-                      <Loader2 className="h-5 w-5 animate-spin" />
+                      <Loader2 className="h-4 w-4 animate-spin" />
                       <span>Uploading...</span>
                     </>
                   ) : (
                     <>
-                      <Upload className="h-5 w-5" />
+                      <Upload className="h-4 w-4" />
                       <span>Upload Audio</span>
                     </>
                   )}
@@ -377,30 +387,34 @@ const Main = () => {
               
               {/* Error message */}
               {uploadError && (
-                <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+                <div className="mt-3 p-2 bg-red-50 border border-red-200 rounded-lg">
                   <div className="flex items-center space-x-2">
-                    <AlertCircle className="h-4 w-4 text-red-500" />
-                    <span className="text-sm text-red-600">{uploadError}</span>
+                    <AlertCircle className="h-3 w-3 text-red-500" />
+                    <span className="text-xs text-red-600">{uploadError}</span>
                   </div>
                 </div>
               )}
             </div>
 
             {/* Real-Time Recording Card */}
-            <div className="bg-white rounded-2xl shadow-lg p-6 hover:shadow-xl transition-shadow">
-              <div className="flex items-center justify-center w-16 h-16 bg-purple-100 rounded-full mb-4">
-                <Mic className="h-8 w-8 text-purple-600" />
+            <div className="bg-white rounded-xl shadow-lg p-4 hover:shadow-xl transition-shadow">
+              <div className="flex items-start space-x-3">
+                <div className="flex items-center justify-center w-12 h-12 bg-purple-100 rounded-full flex-shrink-0">
+                  <Mic className="h-6 w-6 text-purple-600" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-lg font-semibold text-gray-800 mb-2">Real-Time Recording</h3>
+                  <p className="text-gray-600 mb-3 text-sm">
+                    Record audio directly from your microphone with live transcription.
+                  </p>
+                </div>
               </div>
-              <h3 className="text-xl font-semibold text-gray-800 mb-2">Real-Time Recording</h3>
-              <p className="text-gray-600 mb-4">
-                Record audio directly from your microphone with live transcription.
-              </p>
               
               <button 
                 onClick={() => setShowRealTimeRecording(!showRealTimeRecording)}
-                className="w-full bg-gradient-to-r from-purple-500 to-pink-600 text-white font-semibold py-3 px-6 rounded-lg hover:from-purple-600 hover:to-pink-700 transition-all duration-200 flex items-center justify-center space-x-2"
+                className="w-full bg-gradient-to-r from-purple-500 to-pink-600 text-white font-semibold py-2 px-4 rounded-lg hover:from-purple-600 hover:to-pink-700 transition-all duration-200 flex items-center justify-center space-x-2 text-sm"
               >
-                <Mic className="h-5 w-5" />
+                <Mic className="h-4 w-4" />
                 <span>{showRealTimeRecording ? 'Hide Recorder' : 'Start Recording'}</span>
               </button>
             </div>
@@ -528,14 +542,7 @@ const Main = () => {
           </div>
         </div>
 
-        {/* Voice Status */}
-        <div className="mt-8 bg-white rounded-2xl shadow-lg p-6">
-          <h2 className="text-2xl font-bold text-gray-800 mb-4">Voice Status</h2>
-          <div className="flex items-center space-x-4">
-            <div className="w-4 h-4 bg-green-500 rounded-full animate-pulse"></div>
-            <span className="text-gray-600">Voice recognition is ready</span>
-          </div>
-        </div>
+
       </main>
     </div>
   )
