@@ -54,6 +54,7 @@ const Main = () => {
   const [audioElements, setAudioElements] = useState<{ [key: string]: HTMLAudioElement }>({})
   const [showRealTimeRecording, setShowRealTimeRecording] = useState(false)
   const [deletingFiles, setDeletingFiles] = useState<{ [key: string]: boolean }>({})
+  const [showSplash, setShowSplash] = useState(true)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -382,6 +383,17 @@ const Main = () => {
     }
   }, [isAuthenticated, token])
 
+  // Hide splash screen after 5 seconds
+  useEffect(() => {
+    if (isAuthenticated && token && user) {
+      const timer = setTimeout(() => {
+        setShowSplash(false)
+      }, 5000)
+      
+      return () => clearTimeout(timer)
+    }
+  }, [isAuthenticated, token, user])
+
   // Cleanup audio when component unmounts
   useEffect(() => {
     return () => {
@@ -414,6 +426,30 @@ const Main = () => {
         <div className="text-center">
           <Loader2 className="h-12 w-12 text-blue-600 animate-spin mx-auto mb-4" />
           <p className="text-gray-600">Redirecting to login...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Show splash screen if authenticated and splash is active
+  if (showSplash && isAuthenticated && token && user) {
+    return (
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <div className="text-center">
+          <video
+            autoPlay
+            muted
+            loop
+            className="w-64 h-64 mx-auto"
+            style={{ maxWidth: '300px', maxHeight: '300px' }}
+          >
+            <source src="/src/assets/logo-vocali-animated.mp4" type="video/mp4" />
+            Your browser does not support the video tag.
+          </video>
+          <div className="mt-8">
+            <div className="w-8 h-8 border-2 border-white border-t-transparent rounded-full animate-spin mx-auto"></div>
+            <p className="text-white text-lg mt-4 font-medium">Welcome to Vocali</p>
+          </div>
         </div>
       </div>
     )
