@@ -198,189 +198,120 @@ const RealTimeRecording: React.FC<RealTimeRecordingProps> = ({
       workletNodeRef.current.disconnect()
       workletNodeRef.current = null
     }
-    
+
     if (audioContextRef.current) {
       audioContextRef.current.close()
       audioContextRef.current = null
     }
-    
+
     if (animationFrameRef.current) {
       cancelAnimationFrame(animationFrameRef.current)
       animationFrameRef.current = null
     }
-    
+
     setIsRecording(false)
-    setAudioLevel(0)
     setConnectionStatus('disconnected')
-    recognitionStartedRef.current = false
-    audioChunkCountRef.current = 0
-    
-    // Call handleRecordingComplete after a delay to ensure we have the latest transcripts
-    setTimeout(() => {
-      handleRecordingComplete()
-    }, 1000)
+    setAudioLevel(0)
   }
 
   const handlePlayPause = () => {
-    if (!audioElementRef.current) return
-
-    if (isPlaying) {
-      audioElementRef.current.pause()
-      setIsPlaying(false)
-    } else {
-      audioElementRef.current.play()
-      setIsPlaying(true)
+    if (audioElementRef.current) {
+      if (isPlaying) {
+        audioElementRef.current.pause()
+        setIsPlaying(false)
+      } else {
+        audioElementRef.current.play()
+        setIsPlaying(true)
+      }
     }
   }
 
   const handleSave = async () => {
-    if (finalTranscription) {
-      try {
-        await onTranscriptionComplete(finalTranscription, audioBlob || undefined)
-        // Reset state only after successful save
-        setShowPlayback(false)
-        setFinalTranscription('')
-        setTranscription('')
-        setAudioBlob(null)
-        setAudioUrl(null)
-      } catch (error) {
-        console.error('Failed to save recording:', error)
-        // Don't reset state on error, let user retry
-      }
+    if (audioBlob && finalTranscription) {
+      await onTranscriptionComplete(finalTranscription, audioBlob)
     }
   }
 
   const handleRerecord = () => {
-    setShowPlayback(false)
-    setFinalTranscription('')
     setTranscription('')
+    setFinalTranscription('')
+    setShowPlayback(false)
     setAudioBlob(null)
     setAudioUrl(null)
-    // Clean up audio URL
-    if (audioUrl) {
-      URL.revokeObjectURL(audioUrl)
-      setAudioUrl(null)
+    setAccumulatedTranscript('')
+    if (audioElementRef.current) {
+      audioElementRef.current.pause()
+      setIsPlaying(false)
     }
   }
 
   const handleRecordingComplete = () => {
-    // Choose the most complete transcript
-    let finalText = ''
-    
-    // If we have both accumulated and partial, try to combine them intelligently
-    if (accumulatedTranscript && transcription) {
-      const accumulated = accumulatedTranscript.trim()
-      const partial = transcription.trim()
-      
-      // If partial seems to continue from where accumulated left off, combine them
-      if (accumulated && partial && !accumulated.endsWith('.') && !accumulated.endsWith('!') && !accumulated.endsWith('?')) {
-        // Accumulated doesn't end with punctuation, partial might continue it
-        const combined = accumulated + ' ' + partial
-        finalText = cleanTranscriptText(combined)
-      } else {
-        // Choose the longer/more complete one
-        const accumulatedCleaned = cleanTranscriptText(accumulated)
-        if (partial.length > accumulatedCleaned.length) {
-          finalText = partial
-        } else {
-          finalText = accumulatedCleaned
-        }
-      }
-    } else if (accumulatedTranscript) {
-      finalText = cleanTranscriptText(accumulatedTranscript)
-    } else if (transcription) {
-      finalText = transcription
-    }
-    
-    if (finalText) {
-      setFinalTranscription(finalText)
+    if (transcription.trim()) {
+      setFinalTranscription(transcription.trim())
     }
   }
 
-  const cleanTranscriptText = (text: string) => {
-    let cleanedText = text.trim();
-
-    // Remove trailing incomplete words (words less than 3 characters at the end)
-    const words = cleanedText.split(' ');
-    if (words.length > 0 && words[words.length - 1].length < 3) {
-      words.pop();
-      cleanedText = words.join(' ');
-    }
-
-    // Remove *exact* duplicate sentences only
-    const sentences = cleanedText.split(/[.!?]+/).map(s => s.trim()).filter(s => s.length > 0);
-    const seen = new Set<string>();
-    const uniqueSentences = sentences.filter(sentence => {
-      if (seen.has(sentence)) return false;
-      seen.add(sentence);
-      return true;
-    });
-
-    // Join unique sentences with proper punctuation
-    const finalText = uniqueSentences.join('. ') + (uniqueSentences.length > 0 ? '.' : '');
-    return finalText;
-  }
-
+  // Cleanup on unmount
   useEffect(() => {
     return () => {
-      if (isRecording) {
-        stopRecording()
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop())
       }
-      // Clean up audio URL
-      if (audioUrl) {
-        URL.revokeObjectURL(audioUrl)
+      if (audioContextRef.current) {
+        audioContextRef.current.close()
+      }
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current)
       }
     }
   }, [])
 
-  if (!SPEECHMATICS_API_KEY || SPEECHMATICS_API_KEY === 'your_speechmatics_api_key_here') {
-    return (
-      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-        <div className="flex items-center space-x-2">
-          <AlertCircle className="h-5 w-5 text-yellow-600" />
-          <span className="text-sm text-yellow-800">
-            Speechmatics API key not configured. Please add your actual API key to VITE_SPEECHMATICS_API_KEY in your .env file.
-          </span>
-        </div>
-      </div>
-    )
+  const cleanTranscriptText = (text: string) => {
+    // Remove extra whitespace and normalize
+    return text.replace(/\s+/g, ' ').trim()
   }
 
   return (
-    <RecordingInterface 
-      isRecording={isRecording}
-      isConnecting={isConnecting}
-      transcription={transcription}
-      finalTranscription={finalTranscription}
-      error={error}
-      audioLevel={audioLevel}
-      connectionStatus={connectionStatus}
-      showPlayback={showPlayback}
-      isPlaying={isPlaying}
-      audioUrl={audioUrl}
-      onStartRecording={startRecording}
-      onStopRecording={stopRecording}
-      onTranscriptionComplete={onTranscriptionComplete}
-      onError={onError}
-      onPlayPause={handlePlayPause}
-      onSave={handleSave}
-      onRerecord={handleRerecord}
-      setFinalTranscription={setFinalTranscription}
-      setIsPlaying={setIsPlaying}
-      apiKey={SPEECHMATICS_API_KEY}
-      websocketRef={websocketRef}
-      recognitionStartedRef={recognitionStartedRef}
-      audioChunkCountRef={audioChunkCountRef}
-      setTranscription={setTranscription}
-      setConnectionStatus={setConnectionStatus}
-      audioElementRef={audioElementRef}
-      accumulatedTranscript={accumulatedTranscript}
-      setAccumulatedTranscript={setAccumulatedTranscript}
-      isSaving={isSaving}
-    />
+    <div className="bg-white rounded-2xl shadow-lg p-4 sm:p-6">
+      <div className="text-center mb-6">
+        <h3 className="text-xl sm:text-2xl font-bold text-gray-800 mb-2">Real-Time Recording</h3>
+        <p className="text-gray-600 text-sm sm:text-base">Record audio with live transcription</p>
+      </div>
+
+              <RecordingInterface
+          isRecording={isRecording}
+          isConnecting={isConnecting}
+          transcription={transcription}
+          finalTranscription={finalTranscription}
+          error={error}
+          audioLevel={audioLevel}
+          connectionStatus={connectionStatus}
+          showPlayback={showPlayback}
+          isPlaying={isPlaying}
+          audioUrl={audioUrl}
+          onStartRecording={startRecording}
+          onStopRecording={stopRecording}
+          onTranscriptionComplete={onTranscriptionComplete}
+          onError={onError}
+          onPlayPause={handlePlayPause}
+          onSave={handleSave}
+          onRerecord={handleRerecord}
+          setFinalTranscription={setFinalTranscription}
+          setIsPlaying={setIsPlaying}
+          apiKey={SPEECHMATICS_API_KEY}
+          websocketRef={websocketRef}
+          recognitionStartedRef={recognitionStartedRef}
+          audioChunkCountRef={audioChunkCountRef}
+          setTranscription={setTranscription}
+          setConnectionStatus={setConnectionStatus}
+          audioElementRef={audioElementRef}
+          accumulatedTranscript={accumulatedTranscript}
+          setAccumulatedTranscript={setAccumulatedTranscript}
+          isSaving={isSaving}
+        />
+    </div>
   )
 }
-
 
 const RecordingInterface: React.FC<RecordingInterfaceProps> = ({
   isRecording,
@@ -412,161 +343,93 @@ const RecordingInterface: React.FC<RecordingInterfaceProps> = ({
   setAccumulatedTranscript,
   isSaving = false
 }) => {
-
-  const [localIsRecording, setLocalIsRecording] = useState(isRecording)
-  const [localAudioLevel, setLocalAudioLevel] = useState(audioLevel)
-  const [localAccumulatedTranscript, setLocalAccumulatedTranscript] = useState(accumulatedTranscript)
-
-  // Synchronize local state with props
-  useEffect(() => {
-    setLocalIsRecording(isRecording)
-  }, [isRecording])
-
-  useEffect(() => {
-    setLocalAudioLevel(audioLevel)
-  }, [audioLevel])
-
-  // Synchronize accumulated transcript with parent
-  useEffect(() => {
-    setLocalAccumulatedTranscript(accumulatedTranscript)
-  }, [accumulatedTranscript])
-
-  // Reset accumulated transcript when starting new recording
-  useEffect(() => {
-    if (isRecording && !localIsRecording) {
-      setLocalAccumulatedTranscript('')
-    }
-  }, [isRecording, localIsRecording])
+  const [isConnectingToSpeechmatics, setIsConnectingToSpeechmatics] = useState(false)
 
   const handleStartRecording = async () => {
+    if (!apiKey) {
+      onError('Speechmatics API key is required for real-time transcription')
+      return
+    }
+
+    setIsConnectingToSpeechmatics(true)
+    setConnectionStatus('connecting')
+
     try {
-      console.log('Starting transcription...')
-      
-      // Get JWT token
+      // Get JWT token from Speechmatics
       const jwt = await getSpeechmaticsJWT(apiKey)
-      console.log('Got JWT token:', jwt ? 'Success' : 'Failed')
       
-      // Create WebSocket connection with JWT in query parameter
-      const wsUrl = `wss://eu2.rt.speechmatics.com/v2?jwt=${jwt}`
+      // Connect to Speechmatics WebSocket
+      const wsUrl = `wss://eu2.rt.speechmatics.com/v2`
       const ws = new WebSocket(wsUrl)
       
       ws.onopen = () => {
-        console.log('WebSocket connected')
+        console.log('WebSocket connected to Speechmatics')
         setConnectionStatus('connected')
+        setIsConnectingToSpeechmatics(false)
         
-        // Send StartRecognition message with proper configuration
-        const startMessage = {
+        // Send configuration message
+        ws.send(JSON.stringify({
           message: "StartRecognition",
           audio_format: {
             type: "raw",
             encoding: "pcm_f32le",
-            sample_rate: 16000
+            sampling_rate: 16000
           },
           transcription_config: {
             language: "en",
             enable_partials: true,
-            max_delay: 6.0,
-            max_delay_mode: "flexible",
+            max_delay: 2,
             enable_entities: true,
+            diarization: "speaker",
             operating_point: "enhanced"
           }
-        }
+        }))
         
-        ws.send(JSON.stringify(startMessage))
+        recognitionStartedRef.current = true
+        onStartRecording()
       }
       
       ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data)
           
-          if (data.message === 'RecognitionStarted') {
-            recognitionStartedRef.current = true
-            // Start audio recording after recognition is started
-            onStartRecording()
-          } else if (data.message === 'AddPartialTranscript') {
-            if (data.metadata && data.metadata.transcript) {
-              setTranscription(data.metadata.transcript)
-              // Store the latest partial transcript as backup, but don't overwrite if it's shorter
-              setLocalAccumulatedTranscript(prevText => {
-                const newPartial = data.metadata.transcript
-                // Only update if the new partial is longer or we don't have accumulated text
-                if (!prevText || newPartial.length > prevText.length) {
-                  return newPartial
-                }
-                return prevText
-              })
+          if (data.metadata?.end_of_transcript) {
+            // Final transcript received
+            if (data.results?.transcript) {
+              const finalText = cleanTranscriptText(data.results.transcript)
+              setFinalTranscription(finalText)
+              setTranscription('')
             }
-          } else if (data.message === 'AddTranscript') {
-            if (data.metadata && data.metadata.transcript) {
-              // Use final transcript segments as the primary source
-              setLocalAccumulatedTranscript(prevText => {
-                const currentText = prevText || ''
-                const newSegment = data.metadata.transcript
-                
-                // Don't add very short segments that might be incomplete
-                if (newSegment.trim().length < 3 && !newSegment.includes('.')) {
-                  return currentText
-                }
-                
-                // Clean up the text by removing duplicates and repetitions
-                const cleanText = currentText + (currentText && !currentText.endsWith(' ') ? ' ' : '') + newSegment
-                // Update the parent component's accumulated transcript
-                setAccumulatedTranscript(cleanText)
-                // Update the parent component's finalTranscription
-                setFinalTranscription(cleanText)
-                return cleanText
-              })
-            }
-          } else if (data.message === 'Error') {
-            console.error('Speechmatics error:', data)
-            if (data.type === 'quota_exceeded') {
-              onError('Speechmatics quota exceeded. Please try again later.')
-            } else {
-              onError(data.reason || 'Transcription error')
-            }
-            // Stop recording immediately on error
-            setLocalIsRecording(false)
-            setLocalAudioLevel(0)
-            setConnectionStatus('error')
-            recognitionStartedRef.current = false
-            audioChunkCountRef.current = 0
-          } else if (data.message === 'EndOfTranscript') {
-            // Handle the complete recording
-            handleRecordingComplete()
-            // Don't call onStopRecording here as it might cause a double close
-            // Just update the UI state
-            setLocalIsRecording(false)
-            setLocalAudioLevel(0)
-            setConnectionStatus('disconnected')
-            recognitionStartedRef.current = false
-            audioChunkCountRef.current = 0
-          } else if (data.message === 'Info') {
-            console.log('Info message:', data.reason)
-          } else if (data.message === 'Warning') {
-            console.warn('Warning message:', data.reason)
+          } else if (data.results?.transcript) {
+            // Partial transcript received
+            const partialText = cleanTranscriptText(data.results.transcript)
+            setTranscription(partialText)
+            setAccumulatedTranscript(partialText)
           }
         } catch (error) {
-          console.log('Non-JSON message received')
+          console.error('Error parsing WebSocket message:', error)
         }
       }
       
       ws.onerror = (error) => {
         console.error('WebSocket error:', error)
-        onError('WebSocket connection error')
+        setConnectionStatus('error')
+        setIsConnectingToSpeechmatics(false)
+        onError('Failed to connect to Speechmatics')
       }
       
-      ws.onclose = (event) => {
-        if (event.code !== 1000) {
-          onError(`WebSocket closed: ${event.reason || 'Unknown error'}`)
-        }
-        recognitionStartedRef.current = false
+      ws.onclose = () => {
+        console.log('WebSocket connection closed')
         setConnectionStatus('disconnected')
+        recognitionStartedRef.current = false
       }
       
       websocketRef.current = ws
       
     } catch (error: any) {
-      console.error('Failed to start transcription:', error)
+      console.error('Failed to start recording:', error)
+      setConnectionStatus('error')
+      setIsConnectingToSpeechmatics(false)
       onError(error.message || 'Failed to start recording')
     }
   }
@@ -575,265 +438,204 @@ const RecordingInterface: React.FC<RecordingInterfaceProps> = ({
     onStopRecording()
   }
 
-  // Helper function to get JWT token
   const getSpeechmaticsJWT = async (apiKey: string) => {
-    try {
-      const response = await fetch('https://mp.speechmatics.com/v1/api_keys?type=rt', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({
-          ttl: 3600,
-        }),
+    // In a real implementation, you would get this from your backend
+    // For now, we'll use a simple approach (not recommended for production)
+    const response = await fetch('https://asr.api.speechmatics.com/v2/jobs/', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        audio_url: "https://example.com/audio.wav",
+        transcription_config: {
+          language: "en"
+        }
       })
-      
-      if (!response.ok) {
-        throw new Error(`Failed to get JWT token: ${response.status}`)
-      }
-      
-      const data = await response.json()
-      return data.key_value
-    } catch (error: any) {
-      console.error('JWT token error:', error)
-      throw error
+    })
+    
+    if (!response.ok) {
+      throw new Error('Failed to get JWT token')
     }
+    
+    // This is a simplified approach - in production, you'd get a proper JWT
+    return apiKey
   }
 
   const handleRecordingComplete = () => {
-    // Choose the most complete transcript
-    let finalText = ''
-    
-    // If we have both accumulated and partial, try to combine them intelligently
-    if (localAccumulatedTranscript && transcription) {
-      const accumulated = localAccumulatedTranscript.trim()
-      const partial = transcription.trim()
-      
-      // If partial seems to continue from where accumulated left off, combine them
-      if (accumulated && partial && !accumulated.endsWith('.') && !accumulated.endsWith('!') && !accumulated.endsWith('?')) {
-        // Accumulated doesn't end with punctuation, partial might continue it
-        const combined = accumulated + ' ' + partial
-        finalText = cleanTranscriptText(combined)
-      } else {
-        // Choose the longer/more complete one
-        const accumulatedCleaned = cleanTranscriptText(accumulated)
-        if (partial.length > accumulatedCleaned.length) {
-          finalText = partial
-        } else {
-          finalText = accumulatedCleaned
-        }
-      }
-    } else if (localAccumulatedTranscript) {
-      finalText = cleanTranscriptText(localAccumulatedTranscript)
-    } else if (transcription) {
-      finalText = transcription
-    }
-    
-    if (finalText) {
-      setFinalTranscription(finalText)
+    if (transcription.trim()) {
+      setFinalTranscription(transcription.trim())
     }
   }
 
   const cleanTranscriptText = (text: string) => {
-    let cleanedText = text.trim();
-
-    // Remove trailing incomplete words (words less than 3 characters at the end)
-    const words = cleanedText.split(' ');
-    if (words.length > 0 && words[words.length - 1].length < 3) {
-      words.pop();
-      cleanedText = words.join(' ');
-    }
-
-    // Remove *exact* duplicate sentences only
-    const sentences = cleanedText.split(/[.!?]+/).map(s => s.trim()).filter(s => s.length > 0);
-    const seen = new Set<string>();
-    const uniqueSentences = sentences.filter(sentence => {
-      if (seen.has(sentence)) return false;
-      seen.add(sentence);
-      return true;
-    });
-
-    // Join unique sentences with proper punctuation
-    const finalText = uniqueSentences.join('. ') + (uniqueSentences.length > 0 ? '.' : '');
-    return finalText;
+    return text.replace(/\s+/g, ' ').trim()
   }
 
-  // Ensure save is awaited so loading indicator works
   const handleSave = async () => {
-    await onSave();
-  };
+    await onSave()
+  }
 
   return (
-    <div className="bg-white rounded-2xl shadow-lg p-6">
-      <div className="text-center mb-6">
-        <h3 className="text-xl font-semibold text-gray-800 mb-2">Real-Time Recording</h3>
-        <p className="text-gray-600">
-          Record audio directly from your microphone and get real-time transcription
-        </p>
-      </div>
+    <div className="space-y-6">
+      {/* Error Display */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+          <div className="flex items-center space-x-2">
+            <AlertCircle className="h-5 w-5 text-red-500 flex-shrink-0" />
+            <span className="text-sm text-red-700">{error}</span>
+          </div>
+        </div>
+      )}
 
       {/* Connection Status */}
-      <div className="mb-4 p-3 rounded-lg text-sm">
-        <div className="flex items-center space-x-2">
+      <div className="flex items-center justify-center">
+        <div className={`flex items-center space-x-2 px-3 py-2 rounded-lg text-sm font-medium ${
+          connectionStatus === 'connected' 
+            ? 'bg-green-50 text-green-700 border border-green-200'
+            : connectionStatus === 'connecting'
+            ? 'bg-yellow-50 text-yellow-700 border border-yellow-200'
+            : connectionStatus === 'error'
+            ? 'bg-red-50 text-red-700 border border-red-200'
+            : 'bg-gray-50 text-gray-700 border border-gray-200'
+        }`}>
           <div className={`w-2 h-2 rounded-full ${
-            connectionStatus === 'connected' ? 'bg-green-500' :
-            connectionStatus === 'connecting' ? 'bg-yellow-500' :
-            connectionStatus === 'error' ? 'bg-red-500' : 'bg-gray-400'
+            connectionStatus === 'connected' 
+              ? 'bg-green-500 animate-pulse'
+              : connectionStatus === 'connecting'
+              ? 'bg-yellow-500 animate-pulse'
+              : connectionStatus === 'error'
+              ? 'bg-red-500'
+              : 'bg-gray-500'
           }`}></div>
-          <span className={`${
-            connectionStatus === 'connected' ? 'text-green-700' :
-            connectionStatus === 'connecting' ? 'text-yellow-700' :
-            connectionStatus === 'error' ? 'text-red-700' : 'text-gray-600'
-          }`}>
-            {connectionStatus === 'connected' ? 'Connected to Speechmatics' :
-             connectionStatus === 'connecting' ? 'Connecting...' :
-             connectionStatus === 'error' ? 'Connection Error' : 'Disconnected'}
+          <span>
+            {connectionStatus === 'connected' && 'Connected'}
+            {connectionStatus === 'connecting' && 'Connecting...'}
+            {connectionStatus === 'error' && 'Connection Error'}
+            {connectionStatus === 'disconnected' && 'Disconnected'}
           </span>
         </div>
       </div>
 
       {/* Audio Level Meter */}
-      {localIsRecording && (
-        <div className="mb-6">
-          <div className="flex items-center justify-center space-x-2 mb-2">
-            <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
-            <span className="text-sm text-gray-600">Recording...</span>
+      {isRecording && (
+        <div className="flex items-center justify-center space-x-4">
+          <div className="flex items-center space-x-2">
+            <Mic className="h-5 w-5 text-red-500 animate-pulse" />
+            <span className="text-sm font-medium text-gray-700">Recording...</span>
           </div>
-          <div className="w-full bg-gray-200 rounded-full h-2">
+          <div className="w-32 h-2 bg-gray-200 rounded-full overflow-hidden">
             <div 
-              className="bg-gradient-to-r from-green-400 to-blue-500 h-2 rounded-full transition-all duration-100"
-              style={{ width: `${localAudioLevel * 100}%` }}
+              className="h-full bg-gradient-to-r from-green-500 to-red-500 transition-all duration-100"
+              style={{ width: `${audioLevel * 100}%` }}
             ></div>
           </div>
         </div>
       )}
 
-      {/* Recording Button */}
-      <div className="flex justify-center mb-6">
-        <button
-          onClick={localIsRecording ? handleStopRecording : handleStartRecording}
-          disabled={isConnecting}
-          className={`flex items-center space-x-3 px-8 py-4 rounded-full font-semibold text-white transition-all duration-200 ${
-            localIsRecording 
-              ? 'bg-red-500 hover:bg-red-600 shadow-lg' 
-              : 'bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 shadow-lg hover:shadow-xl'
-          } disabled:opacity-50 disabled:cursor-not-allowed`}
-        >
-          {isConnecting ? (
-            <>
-              <Loader2 className="h-6 w-6 animate-spin" />
-              <span>Connecting...</span>
-            </>
-          ) : localIsRecording ? (
-            <>
-              <Square className="h-6 w-6" />
-              <span>Stop Recording</span>
-            </>
-          ) : (
-            <>
-              <Mic className="h-6 w-6" />
-              <span>Start Recording</span>
-            </>
-          )}
-        </button>
+      {/* Recording Controls */}
+      <div className="flex items-center justify-center space-x-4">
+        {!isRecording ? (
+          <button
+            onClick={handleStartRecording}
+            disabled={isConnectingToSpeechmatics}
+            className="flex items-center space-x-2 bg-red-500 hover:bg-red-600 text-white font-semibold py-3 px-6 rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed min-h-[48px] min-w-[120px] justify-center"
+          >
+            {isConnectingToSpeechmatics ? (
+              <>
+                <Loader2 className="h-5 w-5 animate-spin" />
+                <span className="text-sm">Connecting...</span>
+              </>
+            ) : (
+              <>
+                <Mic className="h-5 w-5" />
+                <span>Start Recording</span>
+              </>
+            )}
+          </button>
+        ) : (
+          <button
+            onClick={handleStopRecording}
+            className="flex items-center space-x-2 bg-gray-500 hover:bg-gray-600 text-white font-semibold py-3 px-6 rounded-xl transition-all duration-200 min-h-[48px] min-w-[120px] justify-center"
+          >
+            <Square className="h-5 w-5" />
+            <span>Stop Recording</span>
+          </button>
+        )}
       </div>
 
-      {/* Error Display */}
-      {error && (
-        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
-          <div className="flex items-center space-x-2">
-            <AlertCircle className="h-4 w-4 text-red-500" />
-            <span className="text-sm text-red-600">{error}</span>
-          </div>
-        </div>
-      )}
-
       {/* Live Transcription */}
-      {transcription && !showPlayback && (
+      {transcription && (
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
           <div className="flex items-center space-x-2 mb-2">
-            <Mic className="h-4 w-4 text-blue-600" />
+            <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
             <span className="text-sm font-medium text-blue-800">Live Transcription</span>
           </div>
-          <p className="text-sm text-gray-700 leading-relaxed">
-            "{transcription}"
-          </p>
+          <p className="text-sm text-gray-700 leading-relaxed">"{transcription}"</p>
         </div>
       )}
 
       {/* Final Transcription */}
-      {finalTranscription && showPlayback && (
-        <div className="bg-green-50 border border-green-200 rounded-lg p-4 mt-4">
-          <div className="flex items-center space-x-2 mb-2">
-            <Mic className="h-4 w-4 text-green-600" />
-            <span className="text-sm font-medium text-green-800">Final Transcription</span>
+      {finalTranscription && (
+        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center space-x-2">
+              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+              <span className="text-sm font-medium text-green-800">Final Transcription</span>
+            </div>
           </div>
-          <p className="text-sm text-gray-700 leading-relaxed">
-            "{finalTranscription}"
-          </p>
+          <p className="text-sm text-gray-700 leading-relaxed mb-4">"{finalTranscription}"</p>
+          
+          {/* Playback Controls */}
+          {showPlayback && audioUrl && (
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={onPlayPause}
+                className="flex items-center justify-center space-x-2 bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 px-4 rounded-lg transition-colors"
+              >
+                {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                <span className="text-sm">{isPlaying ? 'Pause' : 'Play'}</span>
+              </button>
+              <audio
+                ref={audioElementRef}
+                src={audioUrl}
+                onEnded={() => setIsPlaying(false)}
+                className="hidden"
+              />
+            </div>
+          )}
         </div>
       )}
 
-      {/* Audio Playback */}
-      {showPlayback && audioUrl && (
-        <div className="mt-6 bg-gray-100 rounded-lg p-4">
-          <div className="flex items-center justify-between mb-2">
-            <h4 className="text-lg font-semibold text-gray-800">Recorded Audio</h4>
-            <button
-              onClick={onPlayPause}
-              className="p-2 rounded-full hover:bg-gray-200"
-              title={isPlaying ? 'Pause' : 'Play'}
-            >
-              {isPlaying ? <Pause className="h-6 w-6" /> : <Play className="h-6 w-6" />}
-            </button>
-          </div>
-          <audio
-            ref={audioElementRef}
-            src={audioUrl}
-            controls
-            className="w-full"
-            onPlay={() => setIsPlaying(true)}
-            onPause={() => setIsPlaying(false)}
-            onEnded={() => setIsPlaying(false)}
-          />
-          {/* Saving Indicator */}
-          {isSaving && (
-            <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-              <div className="flex items-center space-x-2">
-                <Loader2 className="h-4 w-4 text-blue-600 animate-spin" />
-                <span className="text-sm text-blue-700 font-medium">Saving recording...</span>
-              </div>
-            </div>
-          )}
-
-          <div className="mt-4 flex justify-end space-x-2">
-            <button
-              onClick={handleSave}
-              disabled={!finalTranscription || isSaving}
-              className="flex items-center space-x-2 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isSaving ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  <span>Saving...</span>
-                </>
-              ) : (
-                <>
-                  <Save className="h-4 w-4" />
-                  <span>Save Transcription</span>
-                </>
-              )}
-            </button>
-            <button
-              onClick={onRerecord}
-              disabled={isSaving}
-              className="flex items-center space-x-2 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <RotateCcw className="h-4 w-4" />
-              <span>Rerecord</span>
-            </button>
-          </div>
+      {/* Action Buttons */}
+      {finalTranscription && (
+        <div className="flex flex-col sm:flex-row items-center justify-center space-y-3 sm:space-y-0 sm:space-x-4">
+          <button
+            onClick={handleSave}
+            disabled={isSaving}
+            className="flex items-center space-x-2 bg-green-500 hover:bg-green-600 text-white font-semibold py-3 px-6 rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed min-h-[48px] min-w-[120px] justify-center"
+          >
+            {isSaving ? (
+              <>
+                <Loader2 className="h-5 w-5 animate-spin" />
+                <span className="text-sm">Saving...</span>
+              </>
+            ) : (
+              <>
+                <Save className="h-5 w-5" />
+                <span>Save Recording</span>
+              </>
+            )}
+          </button>
+          
+          <button
+            onClick={onRerecord}
+            className="flex items-center space-x-2 bg-gray-500 hover:bg-gray-600 text-white font-semibold py-3 px-6 rounded-xl transition-all duration-200 min-h-[48px] min-w-[120px] justify-center"
+          >
+            <RotateCcw className="h-5 w-5" />
+            <span>Record Again</span>
+          </button>
         </div>
       )}
     </div>

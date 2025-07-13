@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
 import { useNavigate } from 'react-router-dom'
-import { LogOut, User, Mail, Loader2, Upload, AlertCircle, Play, FileAudio, Download, FileText, Mic, Trash2 } from 'lucide-react'
+import { LogOut, User, Mail, Loader2, Upload, AlertCircle, Play, FileAudio, Download, FileText, Mic, Trash2, Menu, X } from 'lucide-react'
 import { Notify, Confirm } from 'notiflix'
 import { logout, getProfile } from '../redux/slices/authSlice'
 import type { RootState, AppDispatch } from '../redux/store'
@@ -26,6 +26,7 @@ const Main = () => {
   const [savingRealTimeRecording, setSavingRealTimeRecording] = useState(false)
   const [deletingFiles, setDeletingFiles] = useState<{ [key: string]: boolean }>({})
   const [showSplash, setShowSplash] = useState(true)
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   
   // Pagination state
@@ -385,8 +386,6 @@ const Main = () => {
     }
   }
 
-
-
   // Fetch audio files when component mounts
   useEffect(() => {
     if (isAuthenticated && token) {
@@ -415,8 +414,6 @@ const Main = () => {
       })
     }
   }, [audioElements])
-
-
 
   // Show loading while fetching profile (only if we're authenticated and have a token)
   if (loading && !user && isAuthenticated && token && token !== 'undefined' && token !== 'null') {
@@ -451,7 +448,7 @@ const Main = () => {
             autoPlay
             muted
             loop
-            className="w-64 h-64 mx-auto max-w-[300px] max-h-[300px]"
+            className="w-48 h-48 sm:w-64 sm:h-64 mx-auto max-w-[300px] max-h-[300px]"
           >
             <source src="/src/assets/logo-vocali-animated.mp4" type="video/mp4" />
             Your browser does not support the video tag.
@@ -471,11 +468,21 @@ const Main = () => {
       <header className="bg-white shadow-sm border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
-            <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-2 sm:space-x-4">
               <Logo size="md" />
-              <h1 className="text-2xl font-bold text-gray-800">Vocali</h1>
+              <h1 className="text-xl sm:text-2xl font-bold text-gray-800">Vocali</h1>
             </div>
-            <div className="flex items-center space-x-6">
+            
+            {/* Mobile menu button */}
+            <button
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="lg:hidden p-2 rounded-md text-gray-600 hover:text-gray-800 hover:bg-gray-100 transition-colors flex items-center justify-center"
+            >
+              {mobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+            </button>
+
+            {/* Desktop header content */}
+            <div className="hidden lg:flex items-center space-x-6">
               {/* Voice Status */}
               <div className="flex items-center space-x-2 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
                 <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
@@ -496,30 +503,61 @@ const Main = () => {
               )}
               <button
                 onClick={handleLogout}
-                className="flex items-center space-x-2 text-gray-600 hover:text-gray-800 transition-colors"
+                className="flex items-center justify-center space-x-2 text-gray-600 hover:text-gray-800 transition-colors"
               >
                 <LogOut className="h-5 w-5" />
                 <span>Logout</span>
               </button>
             </div>
           </div>
+
+          {/* Mobile menu */}
+          {mobileMenuOpen && (
+            <div className="lg:hidden border-t border-gray-200 py-4 space-y-4">
+              {/* Voice Status */}
+              <div className="flex items-center space-x-2 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                <span className="text-sm text-green-700 font-medium">Voice recognition ready</span>
+              </div>
+              
+              {user && (
+                <div className="space-y-2">
+                  <div className="flex items-center space-x-2 text-gray-600">
+                    <User className="h-4 w-4" />
+                    <span className="font-medium">{user.name}</span>
+                  </div>
+                  <div className="flex items-center space-x-2 text-gray-500">
+                    <Mail className="h-4 w-4" />
+                    <span className="text-sm">{user.email}</span>
+                  </div>
+                </div>
+              )}
+              <button
+                onClick={handleLogout}
+                className="flex items-center justify-center space-x-2 text-gray-600 hover:text-gray-800 transition-colors w-full p-2 rounded-lg hover:bg-gray-100"
+              >
+                <LogOut className="h-5 w-5" />
+                <span>Logout</span>
+              </button>
+            </div>
+          )}
         </div>
       </header>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="space-y-8">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+        <div className="space-y-6 sm:space-y-8">
           {/* Audio Recording Options */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-3xl mx-auto">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 max-w-4xl mx-auto">
             {/* Upload Audio Card */}
-            <div className="bg-white rounded-xl shadow-lg p-4 hover:shadow-xl transition-shadow">
-              <div className="flex items-start space-x-3">
-                <div className="flex items-center justify-center w-12 h-12 bg-blue-100 rounded-full flex-shrink-0">
-                  <Upload className="h-6 w-6 text-blue-600" />
+            <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6 hover:shadow-xl transition-shadow">
+              <div className="flex items-start space-x-3 sm:space-x-4">
+                <div className="flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 bg-blue-100 rounded-full flex-shrink-0">
+                  <Upload className="h-5 w-5 sm:h-6 sm:w-6 text-blue-600" />
                 </div>
-                <div className="flex-1">
-                  <h3 className="text-lg font-semibold text-gray-800 mb-2">Upload Audio</h3>
-                  <p className="text-gray-600 mb-3 text-sm">
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-base sm:text-lg font-semibold text-gray-800 mb-2">Upload Audio</h3>
+                  <p className="text-gray-600 mb-3 text-xs sm:text-sm">
                     Upload your audio file for voice processing and analysis. Maximum file size: 20 MB.
                   </p>
                 </div>
@@ -539,7 +577,7 @@ const Main = () => {
                 <button 
                   onClick={handleUploadClick}
                   disabled={uploading}
-                  className="w-full bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-semibold py-2 px-4 rounded-lg hover:from-blue-600 hover:to-indigo-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2 text-sm"
+                  className="w-full bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-semibold py-2 sm:py-3 px-4 rounded-lg hover:from-blue-600 hover:to-indigo-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2 text-sm sm:text-base min-h-[44px]"
                 >
                   {uploading ? (
                     <>
@@ -555,7 +593,7 @@ const Main = () => {
                 </button>
                 
                 {/* Tooltip */}
-                <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap">
+                <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-10">
                   <div className="flex items-center space-x-1">
                     <AlertCircle className="h-4 w-4" />
                     <span>Maximum 20 MB audio files</span>
@@ -568,7 +606,7 @@ const Main = () => {
               {uploadError && (
                 <div className="mt-3 p-2 bg-red-50 border border-red-200 rounded-lg">
                   <div className="flex items-center space-x-2">
-                    <AlertCircle className="h-3 w-3 text-red-500" />
+                    <AlertCircle className="h-3 w-3 text-red-500 flex-shrink-0" />
                     <span className="text-xs text-red-600">{uploadError}</span>
                   </div>
                 </div>
@@ -576,14 +614,14 @@ const Main = () => {
             </div>
 
             {/* Real-Time Recording Card */}
-            <div className="bg-white rounded-xl shadow-lg p-4 hover:shadow-xl transition-shadow">
-              <div className="flex items-start space-x-3">
-                <div className="flex items-center justify-center w-12 h-12 bg-purple-100 rounded-full flex-shrink-0">
-                  <Mic className="h-6 w-6 text-purple-600" />
+            <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6 hover:shadow-xl transition-shadow">
+              <div className="flex items-start space-x-3 sm:space-x-4">
+                <div className="flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 bg-purple-100 rounded-full flex-shrink-0">
+                  <Mic className="h-5 w-5 sm:h-6 sm:w-6 text-purple-600" />
                 </div>
-                <div className="flex-1">
-                  <h3 className="text-lg font-semibold text-gray-800 mb-2">Real-Time Recording</h3>
-                  <p className="text-gray-600 mb-3 text-sm">
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-base sm:text-lg font-semibold text-gray-800 mb-2">Real-Time Recording</h3>
+                  <p className="text-gray-600 mb-3 text-xs sm:text-sm">
                     Record audio directly from your microphone with live transcription.
                   </p>
                 </div>
@@ -591,7 +629,7 @@ const Main = () => {
               
               <button 
                 onClick={() => setShowRealTimeRecording(!showRealTimeRecording)}
-                className="w-full bg-gradient-to-r from-purple-500 to-pink-600 text-white font-semibold py-2 px-4 rounded-lg hover:from-purple-600 hover:to-pink-700 transition-all duration-200 flex items-center justify-center space-x-2 text-sm"
+                className="w-full bg-gradient-to-r from-purple-500 to-pink-600 text-white font-semibold py-2 sm:py-3 px-4 rounded-lg hover:from-purple-600 hover:to-pink-700 transition-all duration-200 flex items-center justify-center space-x-2 text-sm sm:text-base min-h-[44px]"
               >
                 <Mic className="h-4 w-4" />
                 <span>{showRealTimeRecording ? 'Hide Recorder' : 'Start Recording'}</span>
@@ -611,11 +649,11 @@ const Main = () => {
           )}
 
           {/* Audio Files List */}
-          <div className="bg-white rounded-2xl shadow-lg p-6">
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center space-x-3">
-                <FileAudio className="h-6 w-6 text-blue-600" />
-                <h2 className="text-2xl font-bold text-gray-800">Your Audio Files</h2>
+          <div className="bg-white rounded-2xl shadow-lg p-4 sm:p-6">
+            <div className="flex items-center justify-between mb-4 sm:mb-6">
+              <div className="flex items-center space-x-2 sm:space-x-3">
+                <FileAudio className="h-5 w-5 sm:h-6 sm:w-6 text-blue-600" />
+                <h2 className="text-xl sm:text-2xl font-bold text-gray-800">Your Audio Files</h2>
               </div>
               {loadingFiles && (
                 <div className="flex items-center space-x-2 text-gray-600">
@@ -626,32 +664,32 @@ const Main = () => {
             </div>
 
             {audioFiles.length === 0 && !loadingFiles ? (
-              <div className="text-center py-12">
-                <FileAudio className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-xl font-semibold text-gray-600 mb-2">No audio files yet</h3>
-                <p className="text-gray-500">Upload your first audio file to get started</p>
+              <div className="text-center py-8 sm:py-12">
+                <FileAudio className="h-12 w-12 sm:h-16 sm:w-16 text-gray-400 mx-auto mb-4" />
+                <h3 className="text-lg sm:text-xl font-semibold text-gray-600 mb-2">No audio files yet</h3>
+                <p className="text-gray-500 text-sm sm:text-base">Upload your first audio file to get started</p>
               </div>
             ) : (
               <>
-                <div className="space-y-4">
+                <div className="space-y-3 sm:space-y-4">
                   {audioFiles.map((file) => (
-                    <div key={file.fileKey} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-4">
-                          <div className="flex items-center justify-center w-12 h-12 bg-blue-100 rounded-lg">
-                            <FileAudio className="h-6 w-6 text-blue-600" />
+                    <div key={file.fileKey} className="border border-gray-200 rounded-lg p-3 sm:p-4 hover:shadow-md transition-shadow">
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-3 sm:space-y-0">
+                        <div className="flex items-start space-x-3 sm:space-x-4 flex-1 min-w-0">
+                          <div className="flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 bg-blue-100 rounded-lg flex-shrink-0">
+                            <FileAudio className="h-5 w-5 sm:h-6 sm:w-6 text-blue-600" />
                           </div>
-                          <div className="flex-1">
-                            <h3 className="font-semibold text-gray-800">{file.metadata.originalName}</h3>
-                            <div className="flex items-center space-x-4 text-sm text-gray-500 mt-1">
+                          <div className="flex-1 min-w-0">
+                            <h3 className="font-semibold text-gray-800 text-sm sm:text-base truncate">{file.metadata.originalName}</h3>
+                            <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-xs sm:text-sm text-gray-500 mt-1">
                               <span>{file.metadata.format}</span>
-                              <span>•</span>
+                              <span className="hidden sm:inline">•</span>
                               <span>{Math.round(file.fileSize / 1024)} KB</span>
-                              <span>•</span>
+                              <span className="hidden sm:inline">•</span>
                               <span>{file.duration}s</span>
                               {file.metadata.transcription?.status && (
                                 <>
-                                  <span>•</span>
+                                  <span className="hidden sm:inline">•</span>
                                   <span className={`px-2 py-1 rounded-full text-xs ${
                                     file.metadata.transcription.status === 'completed' 
                                       ? 'bg-green-100 text-green-700'
@@ -667,11 +705,11 @@ const Main = () => {
                               )}
                             </div>
                             {file.metadata.transcription?.text && file.metadata.transcription.text.trim() !== '' && (
-                              <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                              <div className="mt-3 p-2 sm:p-3 bg-blue-50 border border-blue-200 rounded-lg">
                                 <div className="flex items-center justify-between mb-2">
                                   <div className="flex items-center space-x-2">
-                                    <FileText className="h-4 w-4 text-blue-600" />
-                                    <span className="text-sm font-medium text-blue-800">Transcription</span>
+                                    <FileText className="h-3 w-3 sm:h-4 sm:w-4 text-blue-600" />
+                                    <span className="text-xs sm:text-sm font-medium text-blue-800">Transcription</span>
                                     {file.metadata.transcription?.status !== 'completed' && (
                                       <span className="text-xs text-orange-600 bg-orange-100 px-2 py-1 rounded-full">
                                         {file.metadata.transcription?.status}
@@ -680,23 +718,23 @@ const Main = () => {
                                   </div>
                                   <button
                                     onClick={() => handleDownloadText(file.metadata.originalName, file.metadata.transcription.text)}
-                                    className="p-1 text-blue-600 hover:text-blue-700 hover:bg-blue-100 rounded transition-colors"
+                                    className="p-1 text-blue-600 hover:text-blue-700 hover:bg-blue-100 rounded transition-colors flex items-center justify-center"
                                     title="Download transcription"
                                   >
-                                    <Download className="h-4 w-4" />
+                                    <Download className="h-3 w-3 sm:h-4 sm:w-4" />
                                   </button>
                                 </div>
-                                <p className="text-sm text-gray-700 leading-relaxed">
+                                <p className="text-xs sm:text-sm text-gray-700 leading-relaxed line-clamp-3">
                                   "{file.metadata.transcription.text}"
                                 </p>
                               </div>
                             )}
                           </div>
                         </div>
-                        <div className="flex items-center space-x-2">
+                        <div className="flex items-center space-x-2 sm:space-x-3">
                           <button
                             onClick={() => handlePlayPause(file.fileKey, file.downloadUrl)}
-                            className={`p-2 transition-all duration-200 rounded-lg ${
+                            className={`p-2 sm:p-3 transition-all duration-200 rounded-lg flex items-center justify-center ${
                               playingAudio === file.fileKey 
                                 ? 'bg-red-500 hover:bg-red-600 text-white shadow-lg' 
                                 : 'text-gray-600 hover:text-green-600 hover:bg-green-50'
@@ -704,21 +742,21 @@ const Main = () => {
                             title={playingAudio === file.fileKey ? 'Pause' : 'Play'}
                           >
                             {playingAudio === file.fileKey ? (
-                              <div className="h-5 w-5 flex items-center justify-center">
+                              <div className="h-4 w-4 sm:h-5 sm:w-5 flex items-center justify-center">
                                 <div className="flex space-x-1">
-                                  <div className="w-1 h-4 bg-white rounded-sm"></div>
-                                  <div className="w-1 h-4 bg-white rounded-sm"></div>
+                                  <div className="w-1 h-3 sm:h-4 bg-white rounded-sm"></div>
+                                  <div className="w-1 h-3 sm:h-4 bg-white rounded-sm"></div>
                                 </div>
                               </div>
                             ) : (
-                              <Play className="h-5 w-5" />
+                              <Play className="h-4 w-4 sm:h-5 sm:w-5" />
                             )}
                           </button>
                           
                           <button
                             onClick={() => handleDeleteAudio(file.fileKey, file.metadata.originalName)}
                             disabled={deletingFiles[file.fileKey]}
-                            className={`p-2 transition-all duration-200 rounded-lg ${
+                            className={`p-2 sm:p-3 transition-all duration-200 rounded-lg flex items-center justify-center ${
                               deletingFiles[file.fileKey]
                                 ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                                 : 'text-gray-600 hover:text-red-600 hover:bg-red-50'
@@ -726,9 +764,9 @@ const Main = () => {
                             title="Delete audio file"
                           >
                             {deletingFiles[file.fileKey] ? (
-                              <Loader2 className="h-5 w-5 animate-spin" />
+                              <Loader2 className="h-4 w-4 sm:h-5 sm:w-5 animate-spin" />
                             ) : (
-                              <Trash2 className="h-5 w-5" />
+                              <Trash2 className="h-4 w-4 sm:h-5 sm:w-5" />
                             )}
                           </button>
                         </div>
@@ -751,8 +789,6 @@ const Main = () => {
             )}
           </div>
         </div>
-
-
       </main>
     </div>
   )
