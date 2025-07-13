@@ -10,6 +10,7 @@ import RealTimeRecording from '../components/RealTimeRecording'
 import Pagination from '../components/Pagination'
 import api from '../services/api'
 import type { AudioFile, PaginationInfo, AudioFilesResponse } from '../types/main_interfaces'
+import logoVideo from '../assets/logo-vocali-animated.mp4'
 
 const Main = () => {
   const dispatch = useDispatch<AppDispatch>()
@@ -447,7 +448,7 @@ const Main = () => {
             loop
             className="w-48 h-48 sm:w-64 sm:h-64 mx-auto max-w-[300px] max-h-[300px]"
           >
-            <source src="/src/assets/logo-vocali-animated.mp4" type="video/mp4" />
+            <source src={logoVideo} type="video/mp4" />
             Your browser does not support the video tag.
           </video>
           <div className="mt-8">

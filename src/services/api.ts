@@ -1,8 +1,12 @@
 import axios from 'axios'
 
-const baseURL = import.meta.env.VITE_API_BASE_URL;
+// Get API base URL from environment variables
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api'
+
+// Create axios instance with default configuration
 const api = axios.create({
-  baseURL: baseURL,
+  baseURL: API_BASE_URL,
+  timeout: 30000, // 30 seconds timeout
   headers: {
     'Content-Type': 'application/json',
   },
@@ -12,7 +16,7 @@ const api = axios.create({
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token')
-    if (token) {
+    if (token && token !== 'undefined' && token !== 'null') {
       config.headers.Authorization = `Bearer ${token}`
     }
     return config
@@ -22,16 +26,50 @@ api.interceptors.request.use(
   }
 )
 
-// Response interceptor to handle auth errors
+// Response interceptor for error handling
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    return response
+  },
   (error) => {
-    // Only auto-logout for 401 errors on non-profile endpoints
-    if (error.response?.status === 401 && !error.config.url?.includes('/auth/me')) {
-      localStorage.removeItem('token')
-      localStorage.removeItem('refreshToken')
-      window.location.href = '/auth#login'
+    // Handle different types of errors
+    if (error.response) {
+      // Server responded with error status
+      console.error('API Error Response:', {
+        status: error.response.status,
+        data: error.response.data,
+        url: error.config?.url
+      })
+      
+      // Handle 401 Unauthorized
+      if (error.response.status === 401) {
+        localStorage.removeItem('token')
+        localStorage.removeItem('refreshToken')
+        window.location.href = '/auth#login'
+      }
+    } else if (error.request) {
+      // Request was made but no response received
+      console.error('API Network Error:', {
+        message: error.message,
+        url: error.config?.url
+      })
+      
+      // Show user-friendly error message
+      error.response = {
+        data: {
+          message: 'Network error. Please check your internet connection and try again.'
+        }
+      }
+    } else {
+      // Something else happened
+      console.error('API Error:', error.message)
+      error.response = {
+        data: {
+          message: 'An unexpected error occurred. Please try again.'
+        }
+      }
     }
+    
     return Promise.reject(error)
   }
 )
