@@ -280,8 +280,26 @@ const RealTimeRecording: React.FC<RealTimeRecordingProps> = ({
 
   const handleSave = async () => {
     try {
-      const audioBlob = audioUrl ? await fetch(audioUrl).then(r => r.blob()) : null
-      await onTranscriptionComplete(accumulatedTranscript.trim(), audioBlob || undefined)
+      let audioBlob: Blob | undefined = undefined
+      let fileName = 'recording.wav'
+      
+      if (audioUrl) {
+        // Get the original WebM blob
+        const originalBlob = await fetch(audioUrl).then(r => r.blob())
+        
+        try {
+          // Convert WebM to WAV format for better compatibility
+          audioBlob = await convertWebmToWav(originalBlob)
+          fileName = 'recording.wav'
+        } catch (error) {
+          console.warn('Conversion failed, using original format:', error)
+          // If conversion fails, use the original blob but with a different extension
+          audioBlob = originalBlob
+          fileName = 'recording.webm'
+        }
+      }
+      
+      await onTranscriptionComplete(accumulatedTranscript.trim(), audioBlob)
       
       // Clean up
       if (audioUrl) {
@@ -298,6 +316,95 @@ const RealTimeRecording: React.FC<RealTimeRecordingProps> = ({
       setError(error.message)
       onError(error.message)
     }
+  }
+
+  // Function to convert WebM to WAV format
+  const convertWebmToWav = async (webmBlob: Blob): Promise<Blob> => {
+    return new Promise((resolve, reject) => {
+      try {
+        // Create audio context
+        const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)()
+        
+        // Create file reader to read the WebM blob
+        const fileReader = new FileReader()
+        
+        fileReader.onload = async () => {
+          try {
+            // Decode the WebM audio
+            const arrayBuffer = fileReader.result as ArrayBuffer
+            const audioBuffer = await audioContext.decodeAudioData(arrayBuffer)
+            
+            // Create WAV buffer
+            const wavBuffer = audioBufferToWav(audioBuffer)
+            
+            // Create WAV blob
+            const wavBlob = new Blob([wavBuffer], { type: 'audio/wav' })
+            
+            resolve(wavBlob)
+          } catch (error) {
+            console.warn('WebM to WAV conversion failed, using original format:', error)
+            // Fallback: return the original blob if conversion fails
+            resolve(webmBlob)
+          } finally {
+            audioContext.close()
+          }
+        }
+        
+        fileReader.onerror = () => {
+          console.warn('Failed to read audio file, using original format')
+          // Fallback: return the original blob if reading fails
+          resolve(webmBlob)
+        }
+        
+        fileReader.readAsArrayBuffer(webmBlob)
+      } catch (error) {
+        console.warn('Audio conversion failed, using original format:', error)
+        // Fallback: return the original blob if context creation fails
+        resolve(webmBlob)
+      }
+    })
+  }
+
+  // Function to convert AudioBuffer to WAV format
+  const audioBufferToWav = (buffer: AudioBuffer): ArrayBuffer => {
+    const length = buffer.length
+    const numberOfChannels = buffer.numberOfChannels
+    const sampleRate = buffer.sampleRate
+    const arrayBuffer = new ArrayBuffer(44 + length * numberOfChannels * 2)
+    const view = new DataView(arrayBuffer)
+    
+    // WAV header
+    const writeString = (offset: number, string: string) => {
+      for (let i = 0; i < string.length; i++) {
+        view.setUint8(offset + i, string.charCodeAt(i))
+      }
+    }
+    
+    writeString(0, 'RIFF')
+    view.setUint32(4, 36 + length * numberOfChannels * 2, true)
+    writeString(8, 'WAVE')
+    writeString(12, 'fmt ')
+    view.setUint32(16, 16, true)
+    view.setUint16(20, 1, true)
+    view.setUint16(22, numberOfChannels, true)
+    view.setUint32(24, sampleRate, true)
+    view.setUint32(28, sampleRate * numberOfChannels * 2, true)
+    view.setUint16(32, numberOfChannels * 2, true)
+    view.setUint16(34, 16, true)
+    writeString(36, 'data')
+    view.setUint32(40, length * numberOfChannels * 2, true)
+    
+    // Convert float samples to 16-bit PCM
+    let offset = 44
+    for (let i = 0; i < length; i++) {
+      for (let channel = 0; channel < numberOfChannels; channel++) {
+        const sample = Math.max(-1, Math.min(1, buffer.getChannelData(channel)[i]))
+        view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7FFF, true)
+        offset += 2
+      }
+    }
+    
+    return arrayBuffer
   }
 
   const handleRerecord = () => {
