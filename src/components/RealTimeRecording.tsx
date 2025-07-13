@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react'
-import type { RealTimeRecordingProps, RecordingInterfaceProps } from '../types/real_time_recording'
+import type { RealTimeRecordingProps } from '../types/real_time_recording'
 import { Mic, Square, Play, Pause, Save, RotateCcw, AlertCircle, Loader2 } from 'lucide-react'
 import { getTemporaryToken } from '../services/api'
 
@@ -19,7 +19,7 @@ const RealTimeRecording: React.FC<RealTimeRecordingProps> = ({
   const [isPlaying, setIsPlaying] = useState(false)
   const [audioUrl, setAudioUrl] = useState<string | null>(null)
   const [accumulatedTranscript, setAccumulatedTranscript] = useState('')
-  const [temporaryToken, setTemporaryToken] = useState<string | null>(null)
+
   const [waitingForEndOfTranscript, setWaitingForEndOfTranscript] = useState(false)
   const [currentPartial, setCurrentPartial] = useState('')
 
@@ -43,7 +43,6 @@ const RealTimeRecording: React.FC<RealTimeRecordingProps> = ({
 
       // Get temporary token from Speechmatics API
       const token = await getTemporaryToken()
-      setTemporaryToken(token)
 
       // Initialize audio context and get microphone access
       const stream = await navigator.mediaDevices.getUserMedia({ 
@@ -84,7 +83,6 @@ const RealTimeRecording: React.FC<RealTimeRecordingProps> = ({
       websocketRef.current = new WebSocket(wsUrl)
 
       websocketRef.current.onopen = () => {
-        console.log('WebSocket connected')
         setConnectionStatus('connected')
         setIsConnectingToSpeechmatics(false)
         
@@ -111,11 +109,9 @@ const RealTimeRecording: React.FC<RealTimeRecordingProps> = ({
       websocketRef.current.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data)
-          console.log('WebSocket message received:', data)
 
           if (data.message === 'RecognitionStarted') {
             recognitionStartedRef.current = true
-            console.log('Recognition started, ID:', data.id)
             setIsRecording(true)
             
             // Start MediaRecorder for playback recording
@@ -133,10 +129,9 @@ const RealTimeRecording: React.FC<RealTimeRecordingProps> = ({
             setAccumulatedTranscript(prev => prev + ' ' + newTranscript)
             setCurrentPartial('') // Clear the partial when a final is added
           } else if (data.message === 'EndOfTranscript') {
-            console.log('EndOfTranscript received - transcription complete')
             setWaitingForEndOfTranscript(false)
             // Append any remaining partial to the accumulated transcript
-            setFinalTranscription(prev => {
+            setFinalTranscription(() => {
               const full = (accumulatedTranscript + ' ' + currentPartial).trim()
               setAccumulatedTranscript(full)
               return full
@@ -161,8 +156,7 @@ const RealTimeRecording: React.FC<RealTimeRecordingProps> = ({
         onError('WebSocket connection error')
       }
 
-      websocketRef.current.onclose = (event) => {
-        console.log('WebSocket closed:', event.code, event.reason)
+      websocketRef.current.onclose = () => {
         setConnectionStatus('disconnected')
         setIsRecording(false)
         recognitionStartedRef.current = false
@@ -290,7 +284,7 @@ const RealTimeRecording: React.FC<RealTimeRecordingProps> = ({
   const handleSave = async () => {
     try {
       let audioBlob: Blob | undefined = undefined
-      let fileName = 'recording.wav'
+      // let fileName = 'recording.wav'
       
       if (audioUrl) {
         // Get the original WebM blob
@@ -299,12 +293,12 @@ const RealTimeRecording: React.FC<RealTimeRecordingProps> = ({
         try {
           // Convert WebM to WAV format for better compatibility
           audioBlob = await convertWebmToWav(originalBlob)
-          fileName = 'recording.wav'
+          // fileName = 'recording.wav'
         } catch (error) {
           console.warn('Conversion failed, using original format:', error)
           // If conversion fails, use the original blob but with a different extension
           audioBlob = originalBlob
-          fileName = 'recording.webm'
+          // fileName = 'recording.webm'
         }
       }
       
@@ -329,7 +323,7 @@ const RealTimeRecording: React.FC<RealTimeRecordingProps> = ({
 
   // Function to convert WebM to WAV format
   const convertWebmToWav = async (webmBlob: Blob): Promise<Blob> => {
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
       try {
         // Create audio context
         const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)()

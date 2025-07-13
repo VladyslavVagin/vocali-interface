@@ -87,12 +87,7 @@ const Main = () => {
       const formData = new FormData()
       formData.append('file', file) // Changed from 'audio' to 'file'
 
-      // Log file details for debugging
-      console.log('Uploading file:', {
-        name: file.name,
-        size: file.size,
-        type: file.type
-      })
+
 
       await api.post('/audio/upload', formData, {
         headers: {
@@ -259,7 +254,6 @@ const Main = () => {
         })
       }
 
-      console.log('Audio file deleted successfully:', fileKey)
       
       // Show success notification
       Notify.success('Audio file deleted successfully!', {
@@ -295,8 +289,6 @@ const Main = () => {
 
   const handleRealTimeTranscriptionComplete = async (transcriptionText: string, audioBlob?: Blob) => {
     try {
-      console.log('Real-time transcription completed:', transcriptionText)
-      
       if (!audioBlob) {
         console.error('No audio blob available for saving')
         return
@@ -314,13 +306,12 @@ const Main = () => {
       formData.append('recordingType', 'real-time')
 
       // Upload to your API
-      const response = await api.post('/audio/upload', formData, {
+      await api.post('/audio/upload', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
       })
 
-      console.log('Real-time recording saved successfully:', response.data)
       
       // Refresh the audio files list
       await fetchAudioFiles(1)

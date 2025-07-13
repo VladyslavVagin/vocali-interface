@@ -90,11 +90,20 @@ export const getTemporaryToken = async () => {
   try {
     const SPEECHMATICS_API_KEY = import.meta.env.VITE_SPEECHMATICS_API_KEY
     
+    // Debug logging
+    console.log('Environment check:', {
+      isProd: import.meta.env.PROD,
+      hasApiKey: !!SPEECHMATICS_API_KEY,
+      apiKeyLength: SPEECHMATICS_API_KEY?.length || 0,
+      apiKeyPrefix: SPEECHMATICS_API_KEY?.substring(0, 4) || 'none'
+    })
+    
     if (!SPEECHMATICS_API_KEY) {
       throw new Error('Speechmatics API key not configured')
     }
 
     // Call Speechmatics temporary token API as per documentation
+    console.log('Making request to Speechmatics API...')
     const response = await fetch('https://mp.speechmatics.com/v1/api_keys?type=rt', {
       method: 'POST',
       headers: {
@@ -105,9 +114,16 @@ export const getTemporaryToken = async () => {
         ttl: 60 // 60 seconds TTL as recommended
       })
     })
+    
+    console.log('Speechmatics API response status:', response.status)
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}))
+      console.error('Speechmatics API error response:', {
+        status: response.status,
+        statusText: response.statusText,
+        errorData
+      })
       throw new Error(`Failed to get temporary token: ${errorData.message || response.statusText}`)
     }
 
