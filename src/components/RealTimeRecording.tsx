@@ -21,6 +21,7 @@ const RealTimeRecording: React.FC<RealTimeRecordingProps> = ({
   const [accumulatedTranscript, setAccumulatedTranscript] = useState('')
   const [temporaryToken, setTemporaryToken] = useState<string | null>(null)
   const [waitingForEndOfTranscript, setWaitingForEndOfTranscript] = useState(false)
+  const [currentPartial, setCurrentPartial] = useState('')
 
   const websocketRef = useRef<WebSocket | null>(null)
   const recognitionStartedRef = useRef(false)
@@ -124,16 +125,24 @@ const RealTimeRecording: React.FC<RealTimeRecordingProps> = ({
             startAudioStreaming(stream)
           } else if (data.message === 'AddPartialTranscript') {
             setTranscription(data.metadata.transcript)
+            setCurrentPartial(data.metadata.transcript)
           } else if (data.message === 'AddTranscript') {
             const newTranscript = data.metadata.transcript
             setFinalTranscription(prev => prev + ' ' + newTranscript)
             setTranscription('')
             setAccumulatedTranscript(prev => prev + ' ' + newTranscript)
+            setCurrentPartial('') // Clear the partial when a final is added
           } else if (data.message === 'EndOfTranscript') {
             console.log('EndOfTranscript received - transcription complete')
             setWaitingForEndOfTranscript(false)
-            // Final transcript is now complete in accumulatedTranscript
-            setFinalTranscription(accumulatedTranscript.trim())
+            // Append any remaining partial to the accumulated transcript
+            setFinalTranscription(prev => {
+              const full = (accumulatedTranscript + ' ' + currentPartial).trim()
+              setAccumulatedTranscript(full)
+              return full
+            })
+            setTranscription('')
+            setCurrentPartial('')
           } else if (data.message === 'Error') {
             console.error('Speechmatics error:', data)
             setError(`Speechmatics error: ${data.reason}`)
