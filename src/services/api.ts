@@ -12,16 +12,7 @@ const getApiBaseUrl = () => {
     : 'http://localhost:3000'
 }
 
-// In production, use the Vercel proxy to avoid mixed content issues
-const getBaseURL = () => {
-  if (import.meta.env.PROD) {
-    // Use relative URL to trigger the Vercel proxy
-    return '/api'
-  }
-  return getApiBaseUrl()
-}
-
-const API_BASE_URL = getBaseURL()
+const API_BASE_URL = getApiBaseUrl()
 
 // Create axios instance with default configuration
 const api = axios.create({

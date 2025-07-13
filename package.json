@@ -19,7 +19,6 @@
     "@speechmatics/real-time-client": "^7.0.2",
     "@speechmatics/real-time-client-react": "^2.0.2",
     "axios": "^1.10.0",
-    "http-proxy-middleware": "^2.0.6",
     "lucide-react": "^0.525.0",
     "notiflix": "^3.2.8",
     "react": "^19.1.0",
