@@ -20,6 +20,7 @@ const RealTimeRecording: React.FC<RealTimeRecordingProps> = ({
   const [audioUrl, setAudioUrl] = useState<string | null>(null)
   const [accumulatedTranscript, setAccumulatedTranscript] = useState('')
   const [temporaryToken, setTemporaryToken] = useState<string | null>(null)
+  const [waitingForEndOfTranscript, setWaitingForEndOfTranscript] = useState(false)
 
   const websocketRef = useRef<WebSocket | null>(null)
   const recognitionStartedRef = useRef(false)
@@ -37,6 +38,7 @@ const RealTimeRecording: React.FC<RealTimeRecordingProps> = ({
       setError(null)
       setIsConnectingToSpeechmatics(true)
       setConnectionStatus('connecting')
+      setWaitingForEndOfTranscript(false)
 
       // Get temporary token from Speechmatics API
       const token = await getTemporaryToken()
@@ -127,6 +129,11 @@ const RealTimeRecording: React.FC<RealTimeRecordingProps> = ({
             setFinalTranscription(prev => prev + ' ' + newTranscript)
             setTranscription('')
             setAccumulatedTranscript(prev => prev + ' ' + newTranscript)
+          } else if (data.message === 'EndOfTranscript') {
+            console.log('EndOfTranscript received - transcription complete')
+            setWaitingForEndOfTranscript(false)
+            // Final transcript is now complete in accumulatedTranscript
+            setFinalTranscription(accumulatedTranscript.trim())
           } else if (data.message === 'Error') {
             console.error('Speechmatics error:', data)
             setError(`Speechmatics error: ${data.reason}`)
@@ -150,6 +157,7 @@ const RealTimeRecording: React.FC<RealTimeRecordingProps> = ({
         setConnectionStatus('disconnected')
         setIsRecording(false)
         recognitionStartedRef.current = false
+        setWaitingForEndOfTranscript(false)
       }
 
       // Update audio level meter
@@ -207,6 +215,7 @@ const RealTimeRecording: React.FC<RealTimeRecordingProps> = ({
   const stopRecording = () => {
     try {
       setIsRecording(false)
+      setWaitingForEndOfTranscript(true)
       
       // Stop MediaRecorder
       if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
@@ -227,10 +236,8 @@ const RealTimeRecording: React.FC<RealTimeRecordingProps> = ({
         }
         websocketRef.current.send(JSON.stringify(endOfStreamMessage))
         
-        // Close connection after a short delay
-        setTimeout(() => {
-          websocketRef.current?.close()
-        }, 1000)
+        // Don't close connection immediately - wait for EndOfTranscript
+        // The connection will be closed after EndOfTranscript is received
       }
 
       // Create audio URL for playback
@@ -249,7 +256,6 @@ const RealTimeRecording: React.FC<RealTimeRecordingProps> = ({
       analyserRef.current = null
       microphoneRef.current = null
       dataArrayRef.current = null
-      audioChunksRef.current = []
 
       recognitionStartedRef.current = false
       audioChunkCountRef.current = 0
@@ -275,7 +281,7 @@ const RealTimeRecording: React.FC<RealTimeRecordingProps> = ({
   const handleSave = async () => {
     try {
       const audioBlob = audioUrl ? await fetch(audioUrl).then(r => r.blob()) : null
-      await onTranscriptionComplete(accumulatedTranscript, audioBlob || undefined)
+      await onTranscriptionComplete(accumulatedTranscript.trim(), audioBlob || undefined)
       
       // Clean up
       if (audioUrl) {
@@ -307,6 +313,7 @@ const RealTimeRecording: React.FC<RealTimeRecordingProps> = ({
     setTranscription('')
     setError(null)
     setConnectionStatus('disconnected')
+    setWaitingForEndOfTranscript(false)
     
     // Stop any ongoing recording
     if (isRecording) {
@@ -435,6 +442,12 @@ const RealTimeRecording: React.FC<RealTimeRecordingProps> = ({
             <div className="flex items-center space-x-2">
               <div className="w-2 h-2 bg-green-500 rounded-full"></div>
               <span className="text-sm font-medium text-green-800">Final Transcription</span>
+              {waitingForEndOfTranscript && (
+                <div className="flex items-center space-x-2">
+                  <Loader2 className="h-3 w-3 animate-spin text-green-600" />
+                  <span className="text-xs text-green-600">Processing...</span>
+                </div>
+              )}
             </div>
           </div>
           <p className="text-sm text-gray-700 leading-relaxed mb-4">"{finalTranscription}"</p>
@@ -461,7 +474,7 @@ const RealTimeRecording: React.FC<RealTimeRecordingProps> = ({
       )}
 
       {/* Action Buttons */}
-      {finalTranscription && (
+      {finalTranscription && !waitingForEndOfTranscript && (
         <div className="flex flex-col sm:flex-row items-center justify-center space-y-3 sm:space-y-0 sm:space-x-4">
           <button
             onClick={handleSave}
