@@ -46,7 +46,7 @@ Create a `.env` file in the root directory with the following variables:
 
 ```bash
 # API Configuration
-VITE_API_BASE_URL=http://localhost:3000/api
+VITE_API_BASE_URL=http://localhost:3000
 
 # Speechmatics Configuration
 # Get your API key from: https://portal.speechmatics.com/
