@@ -245,12 +245,6 @@ const RealTimeRecording: React.FC<RealTimeRecordingProps> = ({
     }
   }
 
-  const handleRecordingComplete = () => {
-    if (transcription.trim()) {
-      setFinalTranscription(transcription.trim())
-    }
-  }
-
   // Cleanup on unmount
   useEffect(() => {
     return () => {
@@ -266,10 +260,7 @@ const RealTimeRecording: React.FC<RealTimeRecordingProps> = ({
     }
   }, [])
 
-  const cleanTranscriptText = (text: string) => {
-    // Remove extra whitespace and normalize
-    return text.replace(/\s+/g, ' ').trim()
-  }
+
 
   return (
     <div className="bg-white rounded-2xl shadow-lg p-4 sm:p-6">
@@ -315,7 +306,6 @@ const RealTimeRecording: React.FC<RealTimeRecordingProps> = ({
 
 const RecordingInterface: React.FC<RecordingInterfaceProps> = ({
   isRecording,
-  isConnecting,
   transcription,
   finalTranscription,
   error,
@@ -335,11 +325,9 @@ const RecordingInterface: React.FC<RecordingInterfaceProps> = ({
   apiKey,
   websocketRef,
   recognitionStartedRef,
-  audioChunkCountRef,
   setTranscription,
   setConnectionStatus,
   audioElementRef,
-  accumulatedTranscript,
   setAccumulatedTranscript,
   isSaving = false
 }) => {
@@ -356,7 +344,7 @@ const RecordingInterface: React.FC<RecordingInterfaceProps> = ({
 
     try {
       // Get JWT token from Speechmatics
-      const jwt = await getSpeechmaticsJWT(apiKey)
+      await getSpeechmaticsJWT(apiKey)
       
       // Connect to Speechmatics WebSocket
       const wsUrl = `wss://eu2.rt.speechmatics.com/v2`
@@ -463,11 +451,7 @@ const RecordingInterface: React.FC<RecordingInterfaceProps> = ({
     return apiKey
   }
 
-  const handleRecordingComplete = () => {
-    if (transcription.trim()) {
-      setFinalTranscription(transcription.trim())
-    }
-  }
+
 
   const cleanTranscriptText = (text: string) => {
     return text.replace(/\s+/g, ' ').trim()

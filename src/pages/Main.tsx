@@ -93,19 +93,16 @@ const Main = () => {
         type: file.type
       })
 
-      const response = await api.post('/audio/upload', formData, {
+      await api.post('/audio/upload', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
       })
-
+      
       // Clear the file input
       if (fileInputRef.current) {
         fileInputRef.current.value = ''
       }
-      
-      // Handle successful upload
-      const uploadResult = response.data
       
       // Refresh the audio files list after successful upload
       await fetchAudioFiles(1)

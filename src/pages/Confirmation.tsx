@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import { useNavigate } from 'react-router-dom'
-import { Mail, ArrowLeft, Loader2, CheckCircle } from 'lucide-react'
+import { Mail, ArrowLeft, Loader2 } from 'lucide-react'
 import { confirmSignup, resendConfirmationCode } from '../redux/slices/authSlice'
 import type { RootState, AppDispatch } from '../redux/store'
 import Logo from '../components/Logo'

@@ -56,7 +56,7 @@ export const signin = createAsyncThunk(
   async (credentials: { email: string; password: string }, { rejectWithValue }) => {
     try {
       const response = await api.post('/auth/signin', credentials)
-      const { accessToken, refreshToken, username } = response.data
+      const { accessToken, refreshToken } = response.data
       
       // Store both tokens
       if (accessToken && accessToken !== 'undefined') {
@@ -77,7 +77,7 @@ export const signup = createAsyncThunk(
   'auth/signup',
   async (userData: { email: string; password: string; firstName: string; lastName: string }, { rejectWithValue }) => {
     try {
-      const response = await api.post('/auth/signup', userData)
+      await api.post('/auth/signup', userData)
       return { email: userData.email }
     } catch (error: any) {
       return rejectWithValue(error.response?.data?.message || 'Sign up failed')
@@ -90,7 +90,7 @@ export const confirmSignup = createAsyncThunk(
   async (data: { email: string; confirmationCode: string }, { rejectWithValue }) => {
     try {
       const response = await api.post('/auth/confirm-signup', data)
-      const { accessToken, refreshToken, username } = response.data
+      const { accessToken, refreshToken } = response.data
       
       // Store both tokens
       if (accessToken && accessToken !== 'undefined') {
@@ -143,7 +143,7 @@ export const confirmForgotPassword = createAsyncThunk(
   }
 )
 
-export const logout = createAsyncThunk('auth/logout', async (_, { rejectWithValue }) => {
+export const logout = createAsyncThunk('auth/logout', async () => {
   try {
     await api.post('/auth/logout')
     localStorage.removeItem('token')
