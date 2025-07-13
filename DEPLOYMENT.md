@@ -8,8 +8,8 @@ Before deploying, make sure to set up the following environment variables:
 
 1. **VITE_API_BASE_URL**
    - Description: Base URL for your API endpoints
-   - Example: `https://your-api-domain.com/api`
-   - Default: `http://localhost:3000/api`
+   - Example: `http://your-api-domain.com`
+   - Default: `http://localhost:3000` (development only)
 
 2. **VITE_SPEECHMATICS_API_KEY**
    - Description: API key for Speechmatics real-time transcription
@@ -25,12 +25,17 @@ Before deploying, make sure to set up the following environment variables:
 3. Add each variable with the appropriate value
 4. Make sure to set them for all environments (Production, Preview, Development)
 
+**Example API URL**:
+```
+VITE_API_BASE_URL=http://your-production-api.com
+```
+
 #### For Local Development:
 
 Create a `.env` file in the root directory:
 
 ```bash
-VITE_API_BASE_URL=http://localhost:3000/api
+VITE_API_BASE_URL=http://localhost:3000
 VITE_SPEECHMATICS_API_KEY=your_speechmatics_api_key_here
 ```
 
@@ -75,7 +80,7 @@ After deployment, make sure to set your environment variables in the Vercel dash
 1. Go to your project settings
 2. Navigate to "Environment Variables"
 3. Add:
-   - `VITE_API_BASE_URL` = Your production API URL
+   - `VITE_API_BASE_URL` = `http://your-production-api.com`
    - `VITE_SPEECHMATICS_API_KEY` = Your Speechmatics API key
 
 ### 4. Test Your Deployment
@@ -89,18 +94,28 @@ After deployment, make sure to set your environment variables in the Vercel dash
 
 ### Common Issues
 
-1. **Environment Variables Not Working**
+1. **API Connection Issues**
+   - **Problem**: API calls failing
+   - **Solution**: Verify your `VITE_API_BASE_URL` is correct
+   - **Check**: Ensure your API server is running and accessible
+
+2. **404 Errors for Assets**
+   - **Problem**: Assets not loading (images, videos)
+   - **Solution**: Assets are now properly imported using Vite's asset handling
+   - **Status**: ✅ Fixed in this update
+
+3. **Environment Variables Not Working**
    - Make sure variables are prefixed with `VITE_`
    - Check that they're set for the correct environment
    - Redeploy after adding new environment variables
 
-2. **Build Failures**
+4. **Build Failures**
    - Check the build logs in Vercel dashboard
    - Ensure all dependencies are in `package.json`
    - Verify TypeScript compilation passes locally
 
-3. **API Connection Issues**
-   - Verify your `VITE_API_BASE_URL` is correct
+5. **CORS Issues**
+   - Verify your API server allows requests from your Vercel domain
    - Check CORS settings on your API
    - Ensure your API is accessible from Vercel's servers
 
@@ -111,10 +126,12 @@ The project is already configured with:
 - Optimized build settings
 - Proper caching headers
 - Security headers
+- Asset optimization
 
 ## Support
 
 If you encounter issues:
 1. Check the Vercel deployment logs
 2. Verify environment variables are set correctly
-3. Test locally with `npm run build` and `npm run preview` 
+3. Test locally with `npm run build` and `npm run preview`
+4. Ensure your API server is running and accessible 

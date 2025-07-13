@@ -1,7 +1,18 @@
 import axios from 'axios'
 
 // Get API base URL from environment variables
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api'
+const getApiBaseUrl = () => {
+  const envUrl = import.meta.env.VITE_API_BASE_URL
+  if (envUrl) {
+    return envUrl
+  }
+  // Default fallback
+  return import.meta.env.PROD 
+    ? 'http://your-production-api.com' 
+    : 'http://localhost:3000'
+}
+
+const API_BASE_URL = getApiBaseUrl()
 
 // Create axios instance with default configuration
 const api = axios.create({

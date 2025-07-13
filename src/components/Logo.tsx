@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import logoImage from '../assets/logo-vocali.png'
+import logoVideo from '../assets/logo-vocali-animated.mp4'
 
 interface LogoProps {
   size?: 'sm' | 'md' | 'lg' | 'xl'
@@ -30,8 +32,8 @@ const Logo: React.FC<LogoProps> = ({ size = 'md', animated = false, className = 
           className="w-full h-full object-contain"
           onEnded={() => setIsHovered(false)}
         >
-          <source src="/src/assets/logo-vocali-animated.mp4" type="video/mp4" />
-          <img src="/src/assets/logo-vocali.png" alt="Vocali" className="w-full h-full object-contain" />
+          <source src={logoVideo} type="video/mp4" />
+          <img src={logoImage} alt="Vocali" className="w-full h-full object-contain" />
         </video>
       </div>
     )
@@ -44,7 +46,7 @@ const Logo: React.FC<LogoProps> = ({ size = 'md', animated = false, className = 
       onMouseLeave={() => setIsHovered(false)}
     >
       <img 
-        src="/src/assets/logo-vocali.png" 
+        src={logoImage} 
         alt="Vocali" 
         className="w-full h-full object-contain"
       />
