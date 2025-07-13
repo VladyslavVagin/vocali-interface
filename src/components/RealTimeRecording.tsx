@@ -1,6 +1,7 @@
-import { useState, useRef, useEffect } from 'react'
-import { Mic, Square, Loader2, AlertCircle, Play, Pause, Save, RotateCcw } from 'lucide-react'
+import React, { useState, useRef, useEffect } from 'react'
 import type { RealTimeRecordingProps, RecordingInterfaceProps } from '../types/real_time_recording'
+import { Mic, Square, Play, Pause, Save, RotateCcw, AlertCircle, Loader2 } from 'lucide-react'
+import { getTemporaryToken } from '../services/api'
 
 const RealTimeRecording: React.FC<RealTimeRecordingProps> = ({ 
   onTranscriptionComplete, 
@@ -8,458 +9,325 @@ const RealTimeRecording: React.FC<RealTimeRecordingProps> = ({
   isSaving = false
 }) => {
   const [isRecording, setIsRecording] = useState(false)
-  const [isConnecting, setIsConnecting] = useState(false)
+  const [isConnectingToSpeechmatics, setIsConnectingToSpeechmatics] = useState(false)
   const [transcription, setTranscription] = useState('')
   const [finalTranscription, setFinalTranscription] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [audioLevel, setAudioLevel] = useState(0)
-  const [connectionStatus, setConnectionStatus] = useState<string>('disconnected')
+  const [connectionStatus, setConnectionStatus] = useState<'disconnected' | 'connecting' | 'connected' | 'error'>('disconnected')
   const [showPlayback, setShowPlayback] = useState(false)
   const [isPlaying, setIsPlaying] = useState(false)
-  const [audioBlob, setAudioBlob] = useState<Blob | null>(null)
   const [audioUrl, setAudioUrl] = useState<string | null>(null)
   const [accumulatedTranscript, setAccumulatedTranscript] = useState('')
-  
-  const audioContextRef = useRef<AudioContext | null>(null)
-  const analyserRef = useRef<AnalyserNode | null>(null)
-  const microphoneRef = useRef<MediaStreamAudioSourceNode | null>(null)
-  const workletNodeRef = useRef<AudioWorkletNode | null>(null)
-  const animationFrameRef = useRef<number | null>(null)
-  const streamRef = useRef<MediaStream | null>(null)
+  const [temporaryToken, setTemporaryToken] = useState<string | null>(null)
+
   const websocketRef = useRef<WebSocket | null>(null)
   const recognitionStartedRef = useRef(false)
   const audioChunkCountRef = useRef(0)
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
-  const audioChunksRef = useRef<Blob[]>([])
   const audioElementRef = useRef<HTMLAudioElement | null>(null)
-
-  // Speechmatics configuration
-  const SPEECHMATICS_API_KEY = import.meta.env.VITE_SPEECHMATICS_API_KEY
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const audioContextRef = useRef<AudioContext | null>(null)
+  const analyserRef = useRef<AnalyserNode | null>(null)
+  const microphoneRef = useRef<MediaStreamAudioSourceNode | null>(null)
+  const dataArrayRef = useRef<Uint8Array | null>(null)
+  const audioChunksRef = useRef<Blob[]>([])
 
   const startRecording = async () => {
     try {
-      setIsConnecting(true)
       setError(null)
-      setTranscription('')
-      setFinalTranscription('')
-      setShowPlayback(false)
-      setAudioBlob(null)
-      setAudioUrl(null)
+      setIsConnectingToSpeechmatics(true)
       setConnectionStatus('connecting')
 
-      // Get microphone access
+      // Get temporary token from Speechmatics API
+      const token = await getTemporaryToken()
+      setTemporaryToken(token)
+
+      // Initialize audio context and get microphone access
       const stream = await navigator.mediaDevices.getUserMedia({ 
         audio: {
+          sampleRate: 16000,
+          channelCount: 1,
           echoCancellation: true,
           noiseSuppression: true,
-          autoGainControl: true,
-          sampleRate: 16000
+          autoGainControl: true
         } 
       })
 
-      streamRef.current = stream
-
-      // Set up MediaRecorder for audio capture
-      mediaRecorderRef.current = new MediaRecorder(stream)
-      audioChunksRef.current = []
+      // Set up audio analysis for level meter
+      audioContextRef.current = new AudioContext({ sampleRate: 16000 })
+      analyserRef.current = audioContextRef.current.createAnalyser()
+      analyserRef.current.fftSize = 256
+      microphoneRef.current = audioContextRef.current.createMediaStreamSource(stream)
+      microphoneRef.current.connect(analyserRef.current)
       
+      const bufferLength = analyserRef.current.frequencyBinCount
+      dataArrayRef.current = new Uint8Array(bufferLength)
+
+      // Set up MediaRecorder for audio capture and playback
+      mediaRecorderRef.current = new MediaRecorder(stream, {
+        mimeType: 'audio/webm;codecs=opus'
+      })
+
+      // Store audio chunks for playback
+      audioChunksRef.current = []
       mediaRecorderRef.current.ondataavailable = (event) => {
         if (event.data.size > 0) {
           audioChunksRef.current.push(event.data)
         }
       }
 
-      mediaRecorderRef.current.onstop = () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/wav' })
-        const audioUrl = URL.createObjectURL(audioBlob)
-        setAudioBlob(audioBlob)
-        setAudioUrl(audioUrl)
-        setShowPlayback(true)
+      // Connect to Speechmatics WebSocket with temporary token
+      const wsUrl = `wss://eu2.rt.speechmatics.com/v2?jwt=${token}`
+      websocketRef.current = new WebSocket(wsUrl)
+
+      websocketRef.current.onopen = () => {
+        console.log('WebSocket connected')
+        setConnectionStatus('connected')
+        setIsConnectingToSpeechmatics(false)
+        
+        // Send StartRecognition message
+        const startRecognitionMessage = {
+          message: "StartRecognition",
+          audio_format: {
+            type: "raw",
+            encoding: "pcm_s16le",
+            sample_rate: 16000
+          },
+          transcription_config: {
+            language: "en",
+            operating_point: "enhanced",
+            output_locale: "en-US",
+            enable_partials: true,
+            max_delay: 1.0
+          }
+        }
+        
+        websocketRef.current?.send(JSON.stringify(startRecognitionMessage))
       }
 
-      // Start MediaRecorder
-      mediaRecorderRef.current.start()
+      websocketRef.current.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data)
+          console.log('WebSocket message received:', data)
 
-      // Set up audio context and processing
-      audioContextRef.current = new AudioContext({ sampleRate: 16000 })
-      analyserRef.current = audioContextRef.current.createAnalyser()
-      microphoneRef.current = audioContextRef.current.createMediaStreamSource(stream)
-      
-      // Connect microphone to analyser for level meter
-      microphoneRef.current.connect(analyserRef.current)
-      
-      // Set up analyser for level meter
-      analyserRef.current.fftSize = 256
-      const bufferLength = analyserRef.current.frequencyBinCount
-      const dataArray = new Uint8Array(bufferLength)
+          if (data.message === 'RecognitionStarted') {
+            recognitionStartedRef.current = true
+            console.log('Recognition started, ID:', data.id)
+            setIsRecording(true)
+            
+            // Start MediaRecorder for playback recording
+            mediaRecorderRef.current?.start(100)
+            
+            // Start sending raw audio data to Speechmatics
+            startAudioStreaming(stream)
+          } else if (data.message === 'AddPartialTranscript') {
+            setTranscription(data.metadata.transcript)
+          } else if (data.message === 'AddTranscript') {
+            const newTranscript = data.metadata.transcript
+            setFinalTranscription(prev => prev + ' ' + newTranscript)
+            setTranscription('')
+            setAccumulatedTranscript(prev => prev + ' ' + newTranscript)
+          } else if (data.message === 'Error') {
+            console.error('Speechmatics error:', data)
+            setError(`Speechmatics error: ${data.reason}`)
+            onError(`Speechmatics error: ${data.reason}`)
+          }
+        } catch (error) {
+          console.error('Error parsing WebSocket message:', error)
+        }
+      }
 
+      websocketRef.current.onerror = (error) => {
+        console.error('WebSocket error:', error)
+        setError('WebSocket connection error')
+        setConnectionStatus('error')
+        setIsConnectingToSpeechmatics(false)
+        onError('WebSocket connection error')
+      }
+
+      websocketRef.current.onclose = (event) => {
+        console.log('WebSocket closed:', event.code, event.reason)
+        setConnectionStatus('disconnected')
+        setIsRecording(false)
+        recognitionStartedRef.current = false
+      }
+
+      // Update audio level meter
       const updateAudioLevel = () => {
-        if (analyserRef.current && isRecording) {
-          analyserRef.current.getByteFrequencyData(dataArray)
-          const average = dataArray.reduce((a, b) => a + b) / bufferLength
+        if (analyserRef.current && dataArrayRef.current && isRecording) {
+          analyserRef.current.getByteFrequencyData(dataArrayRef.current)
+          const average = dataArrayRef.current.reduce((a, b) => a + b) / dataArrayRef.current.length
           setAudioLevel(average / 255)
-          animationFrameRef.current = requestAnimationFrame(updateAudioLevel)
+          requestAnimationFrame(updateAudioLevel)
         }
       }
-
-      // Create AudioWorklet for processing audio data
-      const workletCode = `
-        class AudioProcessor extends AudioWorkletProcessor {
-          process(inputs, outputs, parameters) {
-            const input = inputs[0];
-            if (input.length > 0) {
-              const inputChannel = input[0];
-              // Send audio data to main thread
-              this.port.postMessage({
-                audioData: inputChannel
-              });
-            }
-            return true;
-          }
-        }
-        registerProcessor('audio-processor', AudioProcessor);
-      `;
-
-      const workletBlob = new Blob([workletCode], { type: 'application/javascript' });
-      const workletUrl = URL.createObjectURL(workletBlob);
-      
-      await audioContextRef.current.audioWorklet.addModule(workletUrl);
-      
-      workletNodeRef.current = new AudioWorkletNode(audioContextRef.current, 'audio-processor');
-      
-      workletNodeRef.current.port.onmessage = (event) => {
-        if (event.data.audioData && websocketRef.current && recognitionStartedRef.current) {
-          // Check WebSocket state before sending
-          if (websocketRef.current.readyState === WebSocket.OPEN) {
-            const audioData = new Float32Array(event.data.audioData);
-            // Convert Float32Array to binary data for WebSocket
-            const buffer = audioData.buffer;
-            try {
-              websocketRef.current.send(buffer);
-              audioChunkCountRef.current++;
-            } catch (error) {
-              console.warn('Failed to send audio data:', error);
-            }
-          }
-        }
-      };
-
-      // Connect the audio processing chain
-      microphoneRef.current.connect(workletNodeRef.current);
-      workletNodeRef.current.connect(audioContextRef.current.destination);
-
-      setIsRecording(true)
-      setIsConnecting(false)
-      setConnectionStatus('connected')
       updateAudioLevel()
 
     } catch (error: any) {
-      setError(error.message || 'Failed to start recording')
-      onError(error.message || 'Failed to start recording')
-      setIsConnecting(false)
+      console.error('Failed to start recording:', error)
+      setError(error.message)
       setConnectionStatus('error')
+      setIsConnectingToSpeechmatics(false)
+      onError(error.message)
     }
   }
 
-  const stopRecording = () => {
-    // Stop MediaRecorder
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-      mediaRecorderRef.current.stop()
-    }
-
-    // Wait a moment for any final transcript segments before sending EndOfStream
-    setTimeout(() => {
-      // Send EndOfStream message
-      if (websocketRef.current && websocketRef.current.readyState === WebSocket.OPEN) {
-        websocketRef.current.send(JSON.stringify({
-          message: "EndOfStream",
-          last_seq_no: audioChunkCountRef.current
-        }));
-        
-        // Wait a moment for the message to be sent before closing
-        setTimeout(() => {
-          if (websocketRef.current) {
-            websocketRef.current.close(1000, 'Normal closure')
-            websocketRef.current = null
+  // Function to stream raw audio data to Speechmatics
+  const startAudioStreaming = (stream: MediaStream) => {
+    const audioContext = new AudioContext({ sampleRate: 16000 })
+    const source = audioContext.createMediaStreamSource(stream)
+    const processor = audioContext.createScriptProcessor(4096, 1, 1)
+    
+    processor.onaudioprocess = (event) => {
+      if (websocketRef.current?.readyState === WebSocket.OPEN && recognitionStartedRef.current) {
+        try {
+          const inputBuffer = event.inputBuffer
+          const inputData = inputBuffer.getChannelData(0)
+          
+          // Convert Float32Array to Int16Array (PCM 16-bit)
+          const pcmData = new Int16Array(inputData.length)
+          for (let i = 0; i < inputData.length; i++) {
+            const sample = Math.max(-1, Math.min(1, inputData[i]))
+            pcmData[i] = sample < 0 ? sample * 0x8000 : sample * 0x7FFF
           }
-        }, 100)
-      } else if (websocketRef.current) {
-        websocketRef.current.close(1000, 'Normal closure')
-        websocketRef.current = null
+          
+          // Send raw PCM data to Speechmatics
+          websocketRef.current.send(pcmData.buffer)
+          audioChunkCountRef.current++
+        } catch (error) {
+          console.error('Error sending audio data:', error)
+        }
       }
-    }, 3000) // Wait 3 seconds for final transcript segments
-
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.stop())
-      streamRef.current = null
     }
     
-    if (workletNodeRef.current) {
-      workletNodeRef.current.disconnect()
-      workletNodeRef.current = null
-    }
+    source.connect(processor)
+    processor.connect(audioContext.destination)
+  }
 
-    if (audioContextRef.current) {
-      audioContextRef.current.close()
-      audioContextRef.current = null
-    }
+  const stopRecording = () => {
+    try {
+      setIsRecording(false)
+      
+      // Stop MediaRecorder
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+        mediaRecorderRef.current.stop()
+      }
 
-    if (animationFrameRef.current) {
-      cancelAnimationFrame(animationFrameRef.current)
-      animationFrameRef.current = null
-    }
+      // Stop microphone stream
+      if (mediaRecorderRef.current?.stream) {
+        mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop())
+      }
 
-    setIsRecording(false)
-    setConnectionStatus('disconnected')
-    setAudioLevel(0)
+      // Close WebSocket connection
+      if (websocketRef.current && websocketRef.current.readyState === WebSocket.OPEN) {
+        // Send EndOfStream message
+        const endOfStreamMessage = {
+          message: "EndOfStream",
+          last_seq_no: audioChunkCountRef.current
+        }
+        websocketRef.current.send(JSON.stringify(endOfStreamMessage))
+        
+        // Close connection after a short delay
+        setTimeout(() => {
+          websocketRef.current?.close()
+        }, 1000)
+      }
+
+      // Create audio URL for playback
+      if (audioChunksRef.current.length > 0) {
+        const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' })
+        const url = URL.createObjectURL(blob)
+        setAudioUrl(url)
+        setShowPlayback(true)
+      }
+
+      // Reset audio analysis
+      if (audioContextRef.current) {
+        audioContextRef.current.close()
+        audioContextRef.current = null
+      }
+      analyserRef.current = null
+      microphoneRef.current = null
+      dataArrayRef.current = null
+      audioChunksRef.current = []
+
+      recognitionStartedRef.current = false
+      audioChunkCountRef.current = 0
+
+    } catch (error: any) {
+      console.error('Error stopping recording:', error)
+      setError(error.message)
+      onError(error.message)
+    }
   }
 
   const handlePlayPause = () => {
     if (audioElementRef.current) {
       if (isPlaying) {
         audioElementRef.current.pause()
-        setIsPlaying(false)
       } else {
         audioElementRef.current.play()
-        setIsPlaying(true)
       }
+      setIsPlaying(!isPlaying)
     }
   }
 
   const handleSave = async () => {
-    if (audioBlob && finalTranscription) {
-      await onTranscriptionComplete(finalTranscription, audioBlob)
+    try {
+      const audioBlob = audioUrl ? await fetch(audioUrl).then(r => r.blob()) : null
+      await onTranscriptionComplete(accumulatedTranscript, audioBlob || undefined)
+      
+      // Clean up
+      if (audioUrl) {
+        URL.revokeObjectURL(audioUrl)
+        setAudioUrl(null)
+      }
+      setShowPlayback(false)
+      setIsPlaying(false)
+      setFinalTranscription('')
+      setAccumulatedTranscript('')
+      setTranscription('')
+    } catch (error: any) {
+      console.error('Error saving recording:', error)
+      setError(error.message)
+      onError(error.message)
     }
   }
 
   const handleRerecord = () => {
-    setTranscription('')
-    setFinalTranscription('')
+    // Clean up current recording
+    if (audioUrl) {
+      URL.revokeObjectURL(audioUrl)
+      setAudioUrl(null)
+    }
     setShowPlayback(false)
-    setAudioBlob(null)
-    setAudioUrl(null)
+    setIsPlaying(false)
+    setFinalTranscription('')
     setAccumulatedTranscript('')
-    if (audioElementRef.current) {
-      audioElementRef.current.pause()
-      setIsPlaying(false)
+    setTranscription('')
+    setError(null)
+    setConnectionStatus('disconnected')
+    
+    // Stop any ongoing recording
+    if (isRecording) {
+      stopRecording()
     }
   }
 
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach(track => track.stop())
+      if (websocketRef.current) {
+        websocketRef.current.close()
+      }
+      if (audioUrl) {
+        URL.revokeObjectURL(audioUrl)
       }
       if (audioContextRef.current) {
         audioContextRef.current.close()
       }
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current)
-      }
     }
-  }, [])
-
-
-
-  return (
-    <div className="bg-white rounded-2xl shadow-lg p-4 sm:p-6">
-      <div className="text-center mb-6">
-        <h3 className="text-xl sm:text-2xl font-bold text-gray-800 mb-2">Real-Time Recording</h3>
-        <p className="text-gray-600 text-sm sm:text-base">Record audio with live transcription</p>
-      </div>
-
-              <RecordingInterface
-          isRecording={isRecording}
-          isConnecting={isConnecting}
-          transcription={transcription}
-          finalTranscription={finalTranscription}
-          error={error}
-          audioLevel={audioLevel}
-          connectionStatus={connectionStatus}
-          showPlayback={showPlayback}
-          isPlaying={isPlaying}
-          audioUrl={audioUrl}
-          onStartRecording={startRecording}
-          onStopRecording={stopRecording}
-          onTranscriptionComplete={onTranscriptionComplete}
-          onError={onError}
-          onPlayPause={handlePlayPause}
-          onSave={handleSave}
-          onRerecord={handleRerecord}
-          setFinalTranscription={setFinalTranscription}
-          setIsPlaying={setIsPlaying}
-          apiKey={SPEECHMATICS_API_KEY}
-          websocketRef={websocketRef}
-          recognitionStartedRef={recognitionStartedRef}
-          audioChunkCountRef={audioChunkCountRef}
-          setTranscription={setTranscription}
-          setConnectionStatus={setConnectionStatus}
-          audioElementRef={audioElementRef}
-          accumulatedTranscript={accumulatedTranscript}
-          setAccumulatedTranscript={setAccumulatedTranscript}
-          isSaving={isSaving}
-        />
-    </div>
-  )
-}
-
-const RecordingInterface: React.FC<RecordingInterfaceProps> = ({
-  isRecording,
-  transcription,
-  finalTranscription,
-  error,
-  audioLevel,
-  connectionStatus,
-  showPlayback,
-  isPlaying,
-  audioUrl,
-  onStartRecording,
-  onStopRecording,
-  onError,
-  onPlayPause,
-  onSave,
-  onRerecord,
-  setFinalTranscription,
-  setIsPlaying,
-  apiKey,
-  websocketRef,
-  recognitionStartedRef,
-  setTranscription,
-  setConnectionStatus,
-  audioElementRef,
-  setAccumulatedTranscript,
-  isSaving = false
-}) => {
-  const [isConnectingToSpeechmatics, setIsConnectingToSpeechmatics] = useState(false)
-
-  const handleStartRecording = async () => {
-    if (!apiKey) {
-      onError('Speechmatics API key is required for real-time transcription')
-      return
-    }
-
-    setIsConnectingToSpeechmatics(true)
-    setConnectionStatus('connecting')
-
-    try {
-      // Get JWT token from Speechmatics
-      await getSpeechmaticsJWT(apiKey)
-      
-      // Connect to Speechmatics WebSocket
-      const wsUrl = `wss://eu2.rt.speechmatics.com/v2`
-      const ws = new WebSocket(wsUrl)
-      
-      ws.onopen = () => {
-        console.log('WebSocket connected to Speechmatics')
-        setConnectionStatus('connected')
-        setIsConnectingToSpeechmatics(false)
-        
-        // Send configuration message
-        ws.send(JSON.stringify({
-          message: "StartRecognition",
-          audio_format: {
-            type: "raw",
-            encoding: "pcm_f32le",
-            sampling_rate: 16000
-          },
-          transcription_config: {
-            language: "en",
-            enable_partials: true,
-            max_delay: 2,
-            enable_entities: true,
-            diarization: "speaker",
-            operating_point: "enhanced"
-          }
-        }))
-        
-        recognitionStartedRef.current = true
-        onStartRecording()
-      }
-      
-      ws.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data)
-          
-          if (data.metadata?.end_of_transcript) {
-            // Final transcript received
-            if (data.results?.transcript) {
-              const finalText = cleanTranscriptText(data.results.transcript)
-              setFinalTranscription(finalText)
-              setTranscription('')
-            }
-          } else if (data.results?.transcript) {
-            // Partial transcript received
-            const partialText = cleanTranscriptText(data.results.transcript)
-            setTranscription(partialText)
-            setAccumulatedTranscript(partialText)
-          }
-        } catch (error) {
-          console.error('Error parsing WebSocket message:', error)
-        }
-      }
-      
-      ws.onerror = (error) => {
-        console.error('WebSocket error:', error)
-        setConnectionStatus('error')
-        setIsConnectingToSpeechmatics(false)
-        onError('Failed to connect to Speechmatics')
-      }
-      
-      ws.onclose = () => {
-        console.log('WebSocket connection closed')
-        setConnectionStatus('disconnected')
-        recognitionStartedRef.current = false
-      }
-      
-      websocketRef.current = ws
-      
-    } catch (error: any) {
-      console.error('Failed to start recording:', error)
-      setConnectionStatus('error')
-      setIsConnectingToSpeechmatics(false)
-      onError(error.message || 'Failed to start recording')
-    }
-  }
-
-  const handleStopRecording = () => {
-    onStopRecording()
-  }
-
-  const getSpeechmaticsJWT = async (apiKey: string) => {
-    // In a real implementation, you would get this from your backend
-    // For now, we'll use a simple approach (not recommended for production)
-    const response = await fetch('https://asr.api.speechmatics.com/v2/jobs/', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        audio_url: "https://example.com/audio.wav",
-        transcription_config: {
-          language: "en"
-        }
-      })
-    })
-    
-    if (!response.ok) {
-      throw new Error('Failed to get JWT token')
-    }
-    
-    // This is a simplified approach - in production, you'd get a proper JWT
-    return apiKey
-  }
-
-
-
-  const cleanTranscriptText = (text: string) => {
-    return text.replace(/\s+/g, ' ').trim()
-  }
-
-  const handleSave = async () => {
-    await onSave()
-  }
+  }, [audioUrl])
 
   return (
     <div className="space-y-6">
@@ -522,7 +390,7 @@ const RecordingInterface: React.FC<RecordingInterfaceProps> = ({
       <div className="flex items-center justify-center space-x-4">
         {!isRecording ? (
           <button
-            onClick={handleStartRecording}
+            onClick={startRecording}
             disabled={isConnectingToSpeechmatics}
             className="flex items-center space-x-2 bg-red-500 hover:bg-red-600 text-white font-semibold py-3 px-6 rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed min-h-[48px] min-w-[120px] justify-center"
           >
@@ -540,7 +408,7 @@ const RecordingInterface: React.FC<RecordingInterfaceProps> = ({
           </button>
         ) : (
           <button
-            onClick={handleStopRecording}
+            onClick={stopRecording}
             className="flex items-center space-x-2 bg-gray-500 hover:bg-gray-600 text-white font-semibold py-3 px-6 rounded-xl transition-all duration-200 min-h-[48px] min-w-[120px] justify-center"
           >
             <Square className="h-5 w-5" />
@@ -575,7 +443,7 @@ const RecordingInterface: React.FC<RecordingInterfaceProps> = ({
           {showPlayback && audioUrl && (
             <div className="flex items-center space-x-2">
               <button
-                onClick={onPlayPause}
+                onClick={handlePlayPause}
                 className="flex items-center justify-center space-x-2 bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 px-4 rounded-lg transition-colors"
               >
                 {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
@@ -614,7 +482,7 @@ const RecordingInterface: React.FC<RecordingInterfaceProps> = ({
           </button>
           
           <button
-            onClick={onRerecord}
+            onClick={handleRerecord}
             className="flex items-center space-x-2 bg-gray-500 hover:bg-gray-600 text-white font-semibold py-3 px-6 rounded-xl transition-all duration-200 min-h-[48px] min-w-[120px] justify-center"
           >
             <RotateCcw className="h-5 w-5" />

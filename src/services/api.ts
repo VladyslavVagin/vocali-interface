@@ -85,4 +85,39 @@ api.interceptors.response.use(
   }
 )
 
+// Function to get temporary token for Speechmatics real-time transcription
+export const getTemporaryToken = async () => {
+  try {
+    const SPEECHMATICS_API_KEY = import.meta.env.VITE_SPEECHMATICS_API_KEY
+    
+    if (!SPEECHMATICS_API_KEY) {
+      throw new Error('Speechmatics API key not configured')
+    }
+
+    // Call Speechmatics temporary token API as per documentation
+    const response = await fetch('https://mp.speechmatics.com/v1/api_keys?type=rt', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${SPEECHMATICS_API_KEY}`
+      },
+      body: JSON.stringify({
+        ttl: 60 // 60 seconds TTL as recommended
+      })
+    })
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}))
+      throw new Error(`Failed to get temporary token: ${errorData.message || response.statusText}`)
+    }
+
+    const data = await response.json()
+    return data.key_value // Return the temporary token
+
+  } catch (error: any) {
+    console.error('Failed to get temporary token:', error)
+    throw new Error('Failed to get temporary token: ' + error.message)
+  }
+}
+
 export default api 
