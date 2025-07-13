@@ -74,6 +74,43 @@ Preview the production build:
 npm run preview
 ```
 
+## 🚀 Deployment
+
+### Deploy to Vercel
+
+This project is configured for easy deployment to Vercel:
+
+1. **Install Vercel CLI** (optional):
+```bash
+npm i -g vercel
+```
+
+2. **Deploy via Vercel Dashboard**:
+   - Push your code to GitHub
+   - Connect your repository to Vercel
+   - Vercel will automatically detect the Vite configuration
+   - Set your environment variables in the Vercel dashboard
+
+3. **Deploy via CLI**:
+```bash
+vercel
+```
+
+4. **Environment Variables for Production**:
+   Make sure to set these in your Vercel project settings:
+   - `VITE_API_BASE_URL` - Your production API URL
+   - `VITE_SPEECHMATICS_API_KEY` - Your Speechmatics API key
+
+### Manual Deployment
+
+1. Build the project:
+```bash
+npm run build
+```
+
+2. The built files will be in the `dist` directory
+3. Deploy the `dist` directory to your hosting provider
+
 ## 📁 Project Structure
 
 ```
@@ -87,6 +124,7 @@ vocali/
 ├── tailwind.config.js   # Tailwind CSS configuration
 ├── postcss.config.js    # PostCSS configuration
 ├── vite.config.ts       # Vite configuration
+├── vercel.json          # Vercel deployment configuration
 ├── tsconfig.json        # TypeScript configuration
 └── package.json         # Project dependencies
 ```
@@ -103,6 +141,7 @@ The project uses Tailwind CSS for styling. You can customize the design by:
 
 - `npm run dev` - Start development server
 - `npm run build` - Build for production
+- `npm run start` - Start production server (for Vercel)
 - `npm run preview` - Preview production build
 - `npm run lint` - Run ESLint
 

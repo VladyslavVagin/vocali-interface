@@ -6,7 +6,6 @@ export default defineConfig({
   plugins: [react()],
   build: {
     outDir: 'dist',
-    assetsDir: 'assets',
     sourcemap: false,
     rollupOptions: {
       output: {
@@ -14,18 +13,18 @@ export default defineConfig({
           vendor: ['react', 'react-dom'],
           router: ['react-router-dom'],
           redux: ['@reduxjs/toolkit', 'react-redux'],
-          ui: ['lucide-react'],
-          utils: ['axios', 'notiflix']
+          speechmatics: ['@speechmatics/real-time-client', '@speechmatics/real-time-client-react', '@speechmatics/browser-audio-input']
         }
       }
-    }
+    },
+    chunkSizeWarningLimit: 1000
   },
   server: {
-    port: 5173,
+    port: 3000,
     host: true
   },
   preview: {
-    port: 4173,
+    port: 3000,
     host: true
   }
 })
